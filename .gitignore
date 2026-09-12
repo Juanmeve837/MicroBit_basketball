@@ -28,6 +28,7 @@ logs/
 data/raw/
 data/backup/
 *.csv
+*.png
 
 # Salida generada por graphify (grafo de conocimiento, no forma parte del proyecto)
 graphify-out/
