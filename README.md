@@ -148,3 +148,41 @@ es un ID único en toda la base de datos, que nunca se repite entre sesiones.
 - [ ] Escribir tests en `tests/`
 - [ ] API FastAPI para consumo en tiempo real (`config.yaml` ya tiene la sección `api`)
 - [ ] Modelo de ML para predicción de acierto (dependencias `scikit-learn`/`joblib` ya incluidas)
+
+## Frontend (React + Vite)
+
+Interfaz web para subir sesiones y visualizar dashboards, en la raíz de este
+worktree (`feature/frontend-react`).
+
+### Correr en local
+
+```bash
+npm install
+npm run dev      # http://localhost:5173
+```
+
+Por defecto apunta a la API en `http://localhost:8000/api` (ver `.env.example`
+→ copiar a `.env` y ajustar `VITE_API_URL` si es distinto). El `vite.config.js`
+también proxea `/api` hacia `http://localhost:8000` en desarrollo.
+
+### Estructura
+
+```
+src/
+  components/   UploadForm, Dashboard, KPICard, Charts, SessionHistory
+  pages/        Home, SessionDetail, Compare
+  services/     api.js (cliente Axios), sessionCache.js (cache en memoria, TTL 5 min)
+```
+
+### Contrato de API esperado (backend en `feature/backend-api`, aún sin implementar)
+
+| Endpoint                  | Método | Descripción                                                                 |
+|----------------------------|--------|------------------------------------------------------------------------------|
+| `/api/upload`              | POST   | multipart `file` (CSV) → procesa la sesión, devuelve `{ session_id, ... }`   |
+| `/api/sessions`            | GET    | lista `[{ session_id, date, num_tiros, efectividad, potencia_avg }]`         |
+| `/api/sessions/:id`        | GET    | detalle: `{ session_id, efectividad, potencia_avg, consistencia, tiros: [{tiro, muestras, potencia_max, potencia_avg, cesta}], axis_stats: {x,y,z: {mean, std}} }` |
+| `/api/compare`             | GET    | `{ sessions: [{ session_id, date, efectividad, potencias: [] }], samples: [{x,y,z}] }` para boxplot, evolución y distribución de ejes |
+
+Estos endpoints no existen todavía (la rama `feature/backend-api` solo tiene
+el scaffold); el frontend está listo para consumirlos en cuanto se
+implementen con este mismo esquema de respuesta.
