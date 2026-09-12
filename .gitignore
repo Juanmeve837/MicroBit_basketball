@@ -1,0 +1,51 @@
+# Dependencias
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Datos sensibles
+.env
+.env.local
+logs/
+*.log
+
+# Datos que NO commiteamos (subir manualmente si es necesario)
+data/raw/
+data/backup/
+*.csv
+
+# Salida generada por graphify (grafo de conocimiento, no forma parte del proyecto)
+graphify-out/
+
+# Node
+node_modules/
+package-lock.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporal
+*.tmp
+*.temp
+results/latest_session/
+
+# Archivos archivados (no se eliminan, pero no se trackean activamente)
+notebooks/archived/
+scripts/archived/
+results/archived/

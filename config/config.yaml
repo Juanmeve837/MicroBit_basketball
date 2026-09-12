@@ -1,0 +1,51 @@
+# ──────────────────────────────────────────────
+# Configuración Centralizada — Basket Tracker
+# ──────────────────────────────────────────────
+# Edita este archivo para cambiar rutas,
+# parámetros de análisis, logging o API.
+# Todos los scripts y notebooks lo leen desde
+# config/config.py (clase Config singleton).
+
+# PATHS — relativos a la raíz del repo
+paths:
+  data_raw: "data/raw"
+  data_processed: "data/processed"
+  data_db: "data/db"
+  data_backup: "data/backup"
+  notebooks: "notebooks"
+  results_figures: "results/figures"
+  results_tables: "results/tables"
+  results_reports: "results/reports"
+  results_latest: "results/latest_session"
+  scripts: "scripts"
+  tests: "tests"
+  logs: "logs"
+
+# PARÁMETROS DE ANÁLISIS
+analysis:
+  sampling_rate_hz: 33              # Frecuencia de muestreo micro:bit
+  timeout_cesta_ms: 3000            # Tiempo para confirmar canasta con botón B
+  potencia_threshold_min: 500        # mg mínimo para detectar movimiento
+  potencia_threshold_max: 3500       # mg máximo (para outliers)
+  consistencia_threshold: 0.7        # Mínimo índice de consistencia
+
+# SESIÓN
+session:
+  date_format: "%Y%m%d"            # 20260620
+  session_id_format: "{date}_{uuid}"  # 20260620_ABC123
+
+# LOGGING
+logging:
+  level: "INFO"                    # DEBUG, INFO, WARNING, ERROR
+  file: "logs/basket_tracker.log"
+
+# SERVIDOR API
+api:
+  host: "localhost"
+  port: 8000
+  reload: true
+  cors_origins: ["http://localhost:5173"]
+
+# FRONTEND
+frontend:
+  api_url: "http://localhost:8000"
