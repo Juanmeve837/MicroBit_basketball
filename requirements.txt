@@ -17,8 +17,14 @@ pyserial>=3.5
 bleak>=0.20
 
 # API (backend)
-fastapi>=0.100
-uvicorn>=0.22
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+python-multipart>=0.0.9
+
+# Tests
+pytest>=8.0
+httpx>=0.27
 
 # ML (futuro)
 scikit-learn>=1.3

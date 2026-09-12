@@ -30,6 +30,10 @@ data/backup/
 *.csv
 *.png
 
+# Persistencia del backend (sesiones procesadas + indice) — generada en runtime
+data/processed/
+data/index.json
+
 # Salida generada por graphify (grafo de conocimiento, no forma parte del proyecto)
 graphify-out/
 
