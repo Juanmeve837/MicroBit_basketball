@@ -1,25 +1,13 @@
-# Core
-numpy>=1.24
+# Backend API (Basket Tracker)
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+python-multipart>=0.0.9
+
+# Procesamiento de datos
 pandas>=2.0
-pyyaml>=6.0
+numpy>=1.24
 
-# Análisis y visualización
-matplotlib>=3.7
-seaborn>=0.12
-scipy>=1.10
-
-# Jupyter
-jupyter>=1.0
-ipykernel>=6.0
-
-# Comunicación micro:bit
-pyserial>=3.5
-bleak>=0.20
-
-# API (backend)
-fastapi>=0.100
-uvicorn>=0.22
-
-# ML (futuro)
-scikit-learn>=1.3
-joblib>=1.3
+# Tests
+pytest>=8.0
+httpx>=0.27

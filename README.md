@@ -1,150 +1,96 @@
-# 🏀 Basket Tracker — micro:bit
+# Basket Tracker — Backend API
 
-Sistema de análisis de lanzamientos de baloncesto usando un micro:bit como
-sensor de movimiento (acelerómetro). El micro:bit se lleva en la muñeca o en
-el balón, captura los ejes X/Y/Z durante cada tiro y marca si fue canasta
-(botón B), y los datos se envían por Bluetooth (UART) o USB al PC para su
-post-procesamiento y análisis.
+API FastAPI que recibe logs BLE crudos (export de nRF Connect) de sesiones de
+tiro con micro:bit, los procesa en metricas por tiro/sesion y las expone al
+frontend React.
 
-> **Estado:** proyecto en desarrollo activo. Este README se irá actualizando
-> a medida que avance el proyecto.
+## Stack
 
-## Flujo del proyecto
+- **FastAPI** (Python 3.11)
+- **Pandas / NumPy** — parseo del log BLE y calculo de metricas
+- **Pydantic** — esquemas de request/response
+- **Persistencia por archivos** — CSV por sesion + indice JSON en `data/`
+- **Pytest** — tests unitarios y de integracion (TestClient)
 
-1. **Captura** — firmware en la micro:bit (`scripts/utils/microbit_lanzamiento.js`,
-   MakeCode) transmite muestras de aceleración por sesión.
-2. **Post-procesamiento** — `scripts/procesar_sesion.py` limpia y estructura
-   una sesión cruda BLE (`data/raw/`) en un CSV procesado (`data/processed/`).
-3. **Base de datos de tiros** — `scripts/construir_bd_tiros.py` une todas las
-   sesiones procesadas en `data/db/BD_tiros.csv`, asignando a cada tiro un
-   ID único global (nunca se repite entre sesiones).
-4. **Análisis** — `notebooks/02_analisis_sesion.ipynb` lee `data/db/BD_tiros.csv`
-   y genera gráficos y métricas tratando todos los tiros de todas las
-   sesiones como un solo conjunto (`results/figures/`).
-
-## Estructura del repositorio
+## Estructura
 
 ```
-config/           Configuración centralizada (config.yaml + parser Config)
-data/
-  raw/            Sesiones crudas (BLE/USB), no versionadas
-  processed/       Sesiones procesadas (CSV)
-  db/             BD_tiros.csv — todas las sesiones unidas por tiro
-  backup/         Backups automáticos
-notebooks/        Pipeline en notebooks (02) + archived/
-scripts/
-  procesar_sesion.py     Post-procesa un log BLE crudo en CSV limpio
-  construir_bd_tiros.py  Une las sesiones procesadas en data/db/BD_tiros.csv
-  utils/          Funciones reutilizables (parsers, validators, paths)
-                  y firmware de referencia (microbit_lanzamiento.js)
-  archived/       Planes y documentos superados
-results/
-  figures/        Gráficos generados por los notebooks
-  tables/         Tablas resumen (CSV)
-  reports/        Reportes
-  latest_session/ Resultados de la última sesión (no versionado)
-tests/            Tests (pendiente de implementar)
-logs/             Logs de ejecución (no versionado)
+main.py            App FastAPI y endpoints
+models.py          Esquemas Pydantic (SessionInput, SesionOutput, TiroData, ErrorResponse)
+processors.py       Parseo BLE (D/E/B) + calculo de metricas por tiro/sesion
+validators.py       Validacion de upload crudo y del DataFrame resultante
+database.py         Persistencia: CSV por sesion + indice JSON, previene duplicados
+conftest.py         Hace importables los modulos de la raiz desde tests/
+tests/
+  conftest.py       Fixture sample_raw_log + generador build_raw_log
+  test_validators.py
+  test_processors.py
+  test_api.py
 ```
 
-## Configuración
-
-Todo el proyecto lee su configuración desde `config/config.yaml` a través de
-la clase singleton `Config` (`config/config.py`):
-
-```python
-from config.config import Config
-
-cfg = Config.instance()
-data_dir = cfg.get_path('data_raw')
-sampling_rate = cfg.get_param('analysis', 'sampling_rate_hz')
-```
-
-Ver [`config/README.md`](config/README.md) para el detalle de parámetros
-(frecuencia de muestreo, umbrales de potencia, logging, API).
-
-## Instalación
+## Setup
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate      # Windows
+cd D:\worktrees\basket-backend
 pip install -r requirements.txt
 ```
 
-Requiere Python 3.8+. Dependencias principales: `pandas`, `numpy`, `matplotlib`,
-`seaborn`, `scipy`, `pyserial`/`bleak` (comunicación micro:bit), `fastapi`
-(API backend, en desarrollo), `jupyter`.
-
-## Cómo correr el proyecto completo
-
-Guía paso a paso de todo el pipeline, desde una captura nueva hasta el análisis.
-
-### 1. Instalar dependencias
-
-Ver [Instalación](#instalación) arriba (`python -m venv .venv` + `pip install -r requirements.txt`).
-
-### 2. Capturar una sesión con la micro:bit
-
-Flashear `scripts/utils/microbit_lanzamiento.js` a la micro:bit (MakeCode).
-Botón **A** inicia/detiene la captura, botón **B** marca canasta. Exportar
-el log desde nRF Connect (Android/iOS) como CSV y guardarlo en `data/raw/`.
-
-### 3. Procesar la sesión cruda
+## Correr el servidor
 
 ```bash
-python scripts/procesar_sesion.py "BBC microbit [vipiv] (11).csv"
+uvicorn main:app --reload --port 8000
 ```
 
-Acepta una ruta absoluta o el nombre de un archivo dentro de `data/raw/`. Si
-no se pasa `--output`, autogenera el siguiente `sesion_procesada_N.csv` libre
-en `data/processed/`. Ver `python scripts/procesar_sesion.py --help` para
-todas las opciones.
+Docs interactivas (Swagger) en `http://localhost:8000/docs`.
 
-### 4. Actualizar la base de datos de tiros
+## Endpoints
+
+| Metodo | Ruta                    | Descripcion                                              |
+|--------|-------------------------|-----------------------------------------------------------|
+| GET    | `/api/health`           | Healthcheck                                                |
+| POST   | `/api/sesion`           | Sube un log BLE crudo (`multipart/form-data`, campo `archivo`); opcional `session_id` como query param. Devuelve `SesionOutput` con metricas por tiro. |
+| GET    | `/api/sesiones`         | Lista todas las sesiones procesadas (resumen)              |
+| GET    | `/api/sesion/{session_id}` | Detalle completo de una sesion (metricas por tiro)      |
+
+### Ejemplo
 
 ```bash
-python scripts/construir_bd_tiros.py
+curl -X POST http://localhost:8000/api/sesion \
+  -F "archivo=@data/raw/sesion_ejemplo.csv"
 ```
 
-Lee todo `data/processed/`, detecta qué sesiones todavía no están en
-`data/db/BD_tiros.csv` y las agrega, asignando a cada tiro un ID único
-global. Es seguro correrlo repetidas veces: si no hay sesiones nuevas, no
-hace nada; las ya guardadas nunca se renumeran. Usa `--rebuild` solo si
-necesitas reconstruir la BD desde cero (crea backup automático antes).
+## Pipeline de procesamiento
 
-### 5. Analizar
+1. **Validacion de upload** (`validators.validate_raw_upload`) — archivo no vacio, UTF-8 valido.
+2. **Parseo BLE** (`processors.process_raw_log`):
+   - `parse_ble_log` extrae fragmentos del export nRF Connect.
+   - `rebuild_ble_lines` reconstruye lineas completas a partir de fragmentos.
+   - `parse_events` tipa cada linea como `D` (dato de eje), `E` (fin de tiro) o `B` (canasta).
+   - `build_dataframe` arma el DataFrame final: `timestamp, session, tiro, x, y, z, potencia, cesta`.
+3. **Validacion de datos** (`validators.validate_dataframe`) — columnas requeridas, nulos, rangos. No bloquea la respuesta; los problemas quedan en el log del servidor.
+4. **Metricas** (`processors.compute_session_summary` / `compute_tiro_metrics`) — potencia max/avg/min y cesta por tiro; efectividad y potencia promedio por sesion.
+5. **Persistencia** (`database.save_session`) — CSV en `data/processed/{session_id}.csv` + fila en `data/index.json`. Un `session_id` repetido devuelve **400** en vez de sobrescribir.
+
+## Manejo de errores
+
+- CSV/log invalido o sin datos parseables → **400** con `{"detail": ..., "errors": [...]}`.
+- `session_id` duplicado → **400**.
+- Sesion/CSV no encontrado → **404**.
+- Excepcion no controlada → **500**, loggeada con `logger.exception` (nunca se cae el proceso).
+
+## Tests
 
 ```bash
-jupyter notebook notebooks/02_analisis_sesion.ipynb
+pytest
 ```
 
-Lee `data/db/BD_tiros.csv` y trata todos los tiros de todas las sesiones
-como un solo conjunto: curvas de potencia, comparativa cesta/fallo, firma
-de movimiento por eje, KPIs globales. Los PNG se guardan en `results/figures/`.
+Cobertura:
+- `test_validators.py` — validacion de DataFrame (columnas, nulos, rangos) y de upload crudo.
+- `test_processors.py` — parseo BLE completo y calculo de metricas, sobre un log sintetico generado con el mismo formato que exporta nRF Connect.
+- `test_api.py` — endpoints end-to-end con `TestClient`, persistencia redirigida a un directorio temporal por test (no toca `data/` real).
 
-### Agregar una sesión nueva más adelante
+## Pendiente / fuera del MVP
 
-Repetir los pasos 3 y 4 (procesar la sesión + actualizar la BD) y volver a
-correr el notebook del paso 5 para incluirla en el análisis.
-
-## Formato de datos (CSV procesado)
-
-| Columna     | Tipo   | Descripción                          |
-|-------------|--------|---------------------------------------|
-| `timestamp` | string | Hora de la muestra (`HH:MM:SS.mmm`)  |
-| `session`   | string | ID de sesión (`YYYYMMDD_UUID[8]`)    |
-| `tiro`      | int    | Número de tiro                        |
-| `x/y/z`     | int    | Aceleración en mg                     |
-| `potencia`  | float  | Magnitud √(x²+y²+z²)                  |
-| `cesta`     | int    | 1 = canasta, 0 = fallo                |
-
-`data/processed/sesion_procesada_N.csv` y `data/db/BD_tiros.csv` comparten
-este mismo esquema, pero `tiro` significa cosas distintas: en el primero es
-el contador local de esa sesión (se reinicia en cada captura); en el segundo
-es un ID único en toda la base de datos, que nunca se repite entre sesiones.
-
-## Pendiente / próximos pasos
-
-- [ ] Escribir tests en `tests/`
-- [ ] API FastAPI para consumo en tiempo real (`config.yaml` ya tiene la sección `api`)
-- [ ] Modelo de ML para predicción de acierto (dependencias `scikit-learn`/`joblib` ya incluidas)
+- Rate limiting (marcado opcional en el plan original).
+- Migrar la persistencia de CSV+JSON a SQLite si el volumen de sesiones crece.
+- CORS actualmente abierto (`allow_origins=["*"]`) para desarrollo local del frontend — restringir antes de desplegar.
