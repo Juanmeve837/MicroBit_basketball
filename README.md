@@ -183,6 +183,29 @@ src/
 | `/api/sessions/:id`        | GET    | detalle: `{ session_id, efectividad, potencia_avg, consistencia, tiros: [{tiro, muestras, potencia_max, potencia_avg, cesta}], axis_stats: {x,y,z: {mean, std}} }` |
 | `/api/compare`             | GET    | `{ sessions: [{ session_id, date, efectividad, potencias: [] }], samples: [{x,y,z}] }` para boxplot, evolución y distribución de ejes |
 
-Estos endpoints no existen todavía (la rama `feature/backend-api` solo tiene
-el scaffold); el frontend está listo para consumirlos en cuanto se
-implementen con este mismo esquema de respuesta.
+Implementado en `feature/backend-api` (commit posterior al scaffold) con este
+mismo esquema de rutas y campos.
+
+### Deploy a GitHub Pages
+
+El repo incluye `.github/workflows/deploy-pages.yml`: en cada push a `main`
+compila (`npm run build`) y publica `dist/` vía GitHub Pages (source =
+"GitHub Actions", configurar una vez en Settings → Pages).
+
+Pasos para que funcione en producción:
+
+1. Desplegar el backend en Render (ver README de `feature/backend-api`) y
+   copiar la URL pública (`https://<nombre>.onrender.com`).
+2. En GitHub → Settings → Secrets and variables → Actions → **Variables**,
+   crear `VITE_API_URL` = `https://<nombre>.onrender.com/api`. Sin esto, el
+   build usa `http://localhost:8000/api` y el sitio publicado no podrá
+   hablar con ningún backend real.
+3. Mergear esta rama a `main` — el workflow se dispara solo.
+
+Notas de la config para que funcione bajo un subpath de GitHub Pages
+(`https://<user>.github.io/MicroBit_basketball/`):
+- `vite.config.js` fija `base: "/MicroBit_basketball/"` solo en build (en
+  dev sigue en `/` para que el proxy de `/api` funcione igual).
+- El router usa `HashRouter` en vez de `BrowserRouter` (`main.jsx`) porque
+  GitHub Pages no soporta rewrites del lado del servidor — con
+  `BrowserRouter`, recargar directamente en `/sessions/:id` daría 404.
