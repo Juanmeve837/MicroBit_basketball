@@ -1,0 +1,52 @@
+name: Deploy frontend to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+      - run: npm run build
+        env:
+          # Configura esta variable en Settings -> Secrets and variables ->
+          # Actions -> Variables una vez que el backend este desplegado en
+          # Render (ver README de feature/backend-api). Sin ella, el build
+          # cae de vuelta a localhost y el sitio publicado no podra hablar
+          # con ningun backend real.
+          VITE_API_URL: ${{ vars.VITE_API_URL || 'http://localhost:8000/api' }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
