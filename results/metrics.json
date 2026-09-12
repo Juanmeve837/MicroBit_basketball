@@ -1,0 +1,130 @@
+{
+  "best_model": "logistic_regression",
+  "best_params": {
+    "model__C": 0.1,
+    "model__penalty": "l2"
+  },
+  "imbalance_strategy": "class_weight",
+  "cv_comparison": [
+    {
+      "modelo": "logistic_regression",
+      "accuracy": 0.5579953379953378,
+      "precision": 0.3897271761369125,
+      "recall": 0.5237154150197629,
+      "f1": 0.44460015981314155
+    },
+    {
+      "modelo": "random_forest",
+      "accuracy": 0.6098834498834498,
+      "precision": 0.4193355119825708,
+      "recall": 0.3869565217391305,
+      "f1": 0.39924191750278704
+    },
+    {
+      "modelo": "decision_tree",
+      "accuracy": 0.5672727272727272,
+      "precision": 0.37755256716992547,
+      "recall": 0.36047430830039523,
+      "f1": 0.361929273384425
+    }
+  ],
+  "cv_f1_after_tuning": 0.44642733662933437,
+  "optimal_threshold": 0.4149999999999999,
+  "test_metrics_default_threshold": {
+    "threshold": 0.5,
+    "accuracy": 0.5542168674698795,
+    "precision": 0.3902439024390244,
+    "recall": 0.5714285714285714,
+    "f1": 0.463768115942029,
+    "roc_auc": 0.6012987012987012,
+    "confusion_matrix": [
+      [
+        30,
+        25
+      ],
+      [
+        12,
+        16
+      ]
+    ]
+  },
+  "test_metrics_optimal_threshold": {
+    "threshold": 0.4149999999999999,
+    "accuracy": 0.46987951807228917,
+    "precision": 0.36666666666666664,
+    "recall": 0.7857142857142857,
+    "f1": 0.5,
+    "roc_auc": 0.6012987012987012,
+    "confusion_matrix": [
+      [
+        17,
+        38
+      ],
+      [
+        6,
+        22
+      ]
+    ]
+  },
+  "n_train": 328,
+  "n_test": 83,
+  "feature_cols": [
+    "n_muestras",
+    "duracion_ms",
+    "x_max",
+    "x_min",
+    "x_mean",
+    "x_std",
+    "x_range",
+    "x_skew",
+    "x_kurtosis",
+    "x_idx_max_frac",
+    "x_first_half_mean",
+    "x_second_half_mean",
+    "x_asimetria_temporal",
+    "x_jerk_mean",
+    "x_jerk_std",
+    "y_max",
+    "y_min",
+    "y_mean",
+    "y_std",
+    "y_range",
+    "y_skew",
+    "y_kurtosis",
+    "y_idx_max_frac",
+    "y_first_half_mean",
+    "y_second_half_mean",
+    "y_asimetria_temporal",
+    "y_jerk_mean",
+    "y_jerk_std",
+    "z_max",
+    "z_min",
+    "z_mean",
+    "z_std",
+    "z_range",
+    "z_skew",
+    "z_kurtosis",
+    "z_idx_max_frac",
+    "z_first_half_mean",
+    "z_second_half_mean",
+    "z_asimetria_temporal",
+    "z_jerk_mean",
+    "z_jerk_std",
+    "potencia_max",
+    "potencia_min",
+    "potencia_mean",
+    "potencia_std",
+    "potencia_range",
+    "potencia_skew",
+    "potencia_kurtosis",
+    "potencia_idx_max_frac",
+    "potencia_first_half_mean",
+    "potencia_second_half_mean",
+    "potencia_asimetria_temporal",
+    "potencia_jerk_mean",
+    "potencia_jerk_std",
+    "x_sobre_potencia_mean",
+    "y_sobre_potencia_mean",
+    "z_sobre_potencia_mean"
+  ]
+}

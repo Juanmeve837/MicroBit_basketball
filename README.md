@@ -21,6 +21,11 @@ post-procesamiento y análisis.
 4. **Análisis** — `notebooks/02_analisis_sesion.ipynb` lee `data/db/BD_tiros.csv`
    y genera gráficos y métricas tratando todos los tiros de todas las
    sesiones como un solo conjunto (`results/figures/`).
+5. **Machine Learning** — `scripts/prepare_data.py` agrega `BD_tiros.csv` por
+   tiro, `scripts/train_model.py` entrena/compara/ajusta modelos de
+   clasificación cesta-fallo y guarda el mejor en `models/best_model.pkl`,
+   y `scripts/predictor.py` lo usa para predecir un tiro nuevo. Ver
+   [Predicción de cesta/fallo (ML)](#predicción-de-cestafallo-ml) más abajo.
 
 ## Estructura del repositorio
 
@@ -28,20 +33,31 @@ post-procesamiento y análisis.
 config/           Configuración centralizada (config.yaml + parser Config)
 data/
   raw/            Sesiones crudas (BLE/USB), no versionadas
-  processed/       Sesiones procesadas (CSV)
+  processed/       Sesiones procesadas (CSV) + features_por_tiro.csv (dataset ML)
   db/             BD_tiros.csv — todas las sesiones unidas por tiro
   backup/         Backups automáticos
-notebooks/        Pipeline en notebooks (02) + archived/
+notebooks/
+  02_analisis_sesion.ipynb        Análisis exploratorio general + archived/
+  01_eda.ipynb                    EDA orientado a ML (calidad de datos, balance, distribuciones)
+  02_feature_engineering.ipynb    Construcción del dataset agregado por tiro
+  03_model_training.ipynb         Comparación de modelos + tuning
+  04_evaluation.ipynb             Métricas finales, gráficos, limitaciones
 scripts/
   procesar_sesion.py     Post-procesa un log BLE crudo en CSV limpio
   construir_bd_tiros.py  Une las sesiones procesadas en data/db/BD_tiros.csv
+  prepare_data.py        Agrega BD_tiros.csv por tiro → features_por_tiro.csv
+  train_model.py         Entrena, compara y ajusta modelos → models/best_model.pkl
+  predictor.py           Carga el modelo y predice cesta/fallo para un tiro
   utils/          Funciones reutilizables (parsers, validators, paths)
                   y firmware de referencia (microbit_lanzamiento.js)
   archived/       Planes y documentos superados
+models/
+  best_model.pkl  Modelo entrenado (pipeline sklearn + threshold), no versionado
 results/
-  figures/        Gráficos generados por los notebooks
+  figures/        Gráficos (confusion_matrix.png, roc_curve.png, feature_importance.png, …)
   tables/         Tablas resumen (CSV)
   reports/        Reportes
+  metrics.json    Métricas del modelo ML (CV, test, hiperparámetros)
   latest_session/ Resultados de la última sesión (no versionado)
 tests/            Tests (pendiente de implementar)
 logs/             Logs de ejecución (no versionado)
@@ -143,8 +159,83 @@ este mismo esquema, pero `tiro` significa cosas distintas: en el primero es
 el contador local de esa sesión (se reinicia en cada captura); en el segundo
 es un ID único en toda la base de datos, que nunca se repite entre sesiones.
 
+## Predicción de cesta/fallo (ML)
+
+Pipeline completo para predecir si un lanzamiento fue canasta a partir de las
+muestras de aceleración capturadas durante el tiro.
+
+### Entrenar / regenerar el modelo
+
+```bash
+python scripts/prepare_data.py      # BD_tiros.csv -> data/processed/features_por_tiro.csv
+python scripts/train_model.py       # entrena, compara, ajusta y guarda models/best_model.pkl
+```
+
+`train_model.py` acepta `--imbalance class_weight` (por defecto) o
+`--imbalance smote` para el manejo de la clase desbalanceada. Guarda:
+
+- `models/best_model.pkl` — pipeline sklearn (scaler + modelo) + umbral óptimo.
+- `results/metrics.json` — comparación de baselines (CV), hiperparámetros,
+  métricas de test con umbral por defecto y óptimo.
+- `results/figures/{confusion_matrix,roc_curve,feature_importance}.png`.
+
+### Usar el modelo entrenado
+
+```bash
+python scripts/predictor.py data/db/BD_tiros.csv --tiro 5
+python scripts/predictor.py --json '{"x":[-84,-68,-40],"y":[744,752,732],"z":[-688,-684,-708],"potencia":[1016.83,1018.81,1019.16]}'
+```
+
+```python
+from scripts.predictor import ShotPredictor
+
+predictor = ShotPredictor()
+resultado = predictor.predict_shot(samples_df)  # DataFrame con columnas x,y,z,potencia
+# {'prob_cesta': 0.27, 'prediccion': 'fallo', 'cesta': 0, 'threshold': 0.41}
+```
+
+### Notebooks (exploración paso a paso)
+
+```bash
+jupyter notebook notebooks/01_eda.ipynb
+```
+
+`01_eda.ipynb` → `02_feature_engineering.ipynb` → `03_model_training.ipynb` →
+`04_evaluation.ipynb`, en ese orden.
+
+### Resultado actual (honesto, sin ajustar artificialmente)
+
+Con 411 tiros (139 cestas) y las features agregadas por tiro (estadísticos de
+`x`/`y`/`z`/`potencia`: max/min/mean/std/range/skew/kurtosis, forma temporal del
+gesto y proxies de ángulo — 57 features en total):
+
+| Métrica    | Objetivo | Resultado (test) |
+|------------|----------|-------------------|
+| Accuracy   | > 70-75% | ~0.55             |
+| Precision  | > 65%    | ~0.37-0.44        |
+| Recall     | > 60%    | ~0.57-0.79        |
+| F1         | > 0.62   | ~0.46-0.50        |
+| ROC-AUC    | —        | ~0.60             |
+
+**No se alcanzan los objetivos planteados.** El ROC-AUC (~0.60) indica que hay
+señal real (mejor que azar) pero débil, no que el pipeline esté mal construido.
+Motivo principal: cada tiro solo tiene 5-10 muestras de acelerómetro a 33 Hz,
+lo que deja poco detalle temporal para diferenciar el patrón de un tiro
+encestado de uno fallado. Se probaron 57 features (incluyendo timing del pico,
+asimetría temporal, jerk y proxies de ángulo), SMOTE vs. `class_weight`, y
+GridSearchCV sobre Logistic Regression / Decision Tree / Random Forest — el
+techo de F1 en validación cruzada se mantiene en ~0.40-0.45. Ver la sección
+"Interpretación y limitaciones" de `notebooks/04_evaluation.ipynb` para el
+detalle y las recomendaciones (mayor tasa de muestreo o serie temporal completa
+en vez de agregados, sumar giroscopio, más datos).
+
 ## Pendiente / próximos pasos
 
 - [ ] Escribir tests en `tests/`
 - [ ] API FastAPI para consumo en tiempo real (`config.yaml` ya tiene la sección `api`)
-- [ ] Modelo de ML para predicción de acierto (dependencias `scikit-learn`/`joblib` ya incluidas)
+- [x] Modelo de ML para predicción de acierto — implementado
+      (`scripts/prepare_data.py`, `scripts/train_model.py`, `scripts/predictor.py`);
+      no alcanza aún el objetivo de accuracy/F1 planteado (ver sección de arriba)
+- [ ] Mejorar la señal del modelo ML: mayor frecuencia de muestreo o serie
+      temporal completa por tiro (CNN 1D / LSTM en vez de agregados), sumar
+      giroscopio, y recolectar más datos
