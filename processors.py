@@ -139,20 +139,48 @@ def compute_tiro_metrics(df: pd.DataFrame) -> List[Dict[str, Any]]:
     return resumen.to_dict(orient="records")
 
 
+def compute_consistencia(tiros: List[Dict[str, Any]]) -> float:
+    """Indice de consistencia (0-100) basado en el coeficiente de variacion de la
+    potencia promedio entre tiros: 100 = misma potencia en todos los tiros,
+    baja si la potencia varia mucho de un tiro a otro."""
+    if len(tiros) < 2:
+        return 100.0
+    avgs = pd.Series([t["potencia_avg"] for t in tiros], dtype=float)
+    if avgs.mean() == 0:
+        return 0.0
+    cv = avgs.std() / avgs.mean()
+    return round(max(0.0, min(100.0, 100 * (1 - cv))), 1)
+
+
+def compute_axis_stats(df: pd.DataFrame) -> Dict[str, Dict[str, float]]:
+    """Media y desviacion estandar de cada eje (x, y, z) sobre todas las muestras."""
+    stats: Dict[str, Dict[str, float]] = {}
+    for axis in ("x", "y", "z"):
+        serie = df[axis]
+        mean = float(serie.mean()) if not serie.empty else 0.0
+        std = float(serie.std()) if len(serie) > 1 else 0.0
+        if pd.isna(std):
+            std = 0.0
+        stats[axis] = {"mean": round(mean, 2), "std": round(std, 2)}
+    return stats
+
+
 def compute_session_summary(df: pd.DataFrame, session_id: str) -> Dict[str, Any]:
-    """Calcula los KPIs de sesion (efectividad, potencia promedio) + metricas por tiro."""
+    """Calcula los KPIs de sesion (efectividad, potencia, consistencia, ejes) + metricas por tiro."""
     tiros = compute_tiro_metrics(df)
-    total_tiros = len(tiros)
+    num_tiros = len(tiros)
     total_canastas = sum(1 for t in tiros if t["cesta"])
-    efectividad = round(total_canastas / total_tiros * 100, 1) if total_tiros else 0.0
-    potencia_promedio = round(float(df["potencia"].mean()), 2) if not df.empty else 0.0
+    efectividad = round(total_canastas / num_tiros * 100, 1) if num_tiros else 0.0
+    potencia_avg = round(float(df["potencia"].mean()), 2) if not df.empty else 0.0
 
     return {
         "session_id": session_id,
-        "fecha": datetime.now(),
-        "total_tiros": total_tiros,
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "num_tiros": num_tiros,
         "total_canastas": total_canastas,
         "efectividad": efectividad,
-        "potencia_promedio": potencia_promedio,
+        "potencia_avg": potencia_avg,
+        "consistencia": compute_consistencia(tiros),
+        "axis_stats": compute_axis_stats(df),
         "tiros": tiros,
     }

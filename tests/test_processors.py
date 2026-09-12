@@ -53,11 +53,27 @@ def test_compute_session_summary(sample_raw_log):
     summary = processors.compute_session_summary(df, session_id)
 
     assert summary["session_id"] == "test-session"
-    assert summary["total_tiros"] == 2
+    assert summary["num_tiros"] == 2
     assert summary["total_canastas"] == 1
     assert summary["efectividad"] == 50.0
-    assert summary["potencia_promedio"] == 5.0
+    assert summary["potencia_avg"] == 5.0
     assert len(summary["tiros"]) == 2
+    assert summary["consistencia"] == 100.0  # misma potencia en ambos tiros -> CV=0
+    assert set(summary["axis_stats"].keys()) == {"x", "y", "z"}
+    assert summary["axis_stats"]["x"]["mean"] == 3.0
+    assert summary["axis_stats"]["x"]["std"] == 0.0
+
+
+def test_compute_consistencia_lower_when_potencia_varies():
+    tiros_consistentes = [{"potencia_avg": 5.0}, {"potencia_avg": 5.0}]
+    tiros_variables = [{"potencia_avg": 2.0}, {"potencia_avg": 10.0}]
+
+    assert processors.compute_consistencia(tiros_consistentes) == 100.0
+    assert processors.compute_consistencia(tiros_variables) < 100.0
+
+
+def test_compute_consistencia_single_tiro_is_perfect():
+    assert processors.compute_consistencia([{"potencia_avg": 7.0}]) == 100.0
 
 
 def test_generate_session_id_has_date_prefix():

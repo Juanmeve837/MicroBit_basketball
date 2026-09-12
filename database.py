@@ -55,17 +55,34 @@ def save_session(df: pd.DataFrame, summary: Dict[str, Any]) -> Path:
     index = _load_index()
     index.append({
         "session_id": session_id,
-        "fecha": str(summary["fecha"]),
-        "total_tiros": summary["total_tiros"],
+        "date": summary["date"],
+        "num_tiros": summary["num_tiros"],
         "total_canastas": summary["total_canastas"],
         "efectividad": summary["efectividad"],
+        "potencia_avg": summary["potencia_avg"],
     })
     _save_index(index)
     return csv_path
 
 
-def list_sessions() -> List[Dict[str, Any]]:
-    return _load_index()
+def list_sessions(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    order: str = "desc",
+) -> List[Dict[str, Any]]:
+    """Lista sesiones, opcionalmente filtradas por fecha (ISO 'YYYY-MM-DD') y ordenadas."""
+    rows = _load_index()
+
+    if date_from:
+        rows = [r for r in rows if r["date"] >= date_from]
+    if date_to:
+        rows = [r for r in rows if r["date"] <= date_to]
+
+    if sort_by and rows and sort_by in rows[0]:
+        rows = sorted(rows, key=lambda r: r[sort_by], reverse=(order != "asc"))
+
+    return rows
 
 
 def get_session_summary_row(session_id: str) -> Optional[Dict[str, Any]]:

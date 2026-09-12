@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 
 import database
 import processors
-from models import ErrorResponse, SesionOutput, SesionResumen
+from models import CompareOutput, ErrorResponse, SesionOutput, SesionResumen
 from validators import validate_dataframe, validate_raw_upload
 
 logging.basicConfig(
@@ -37,6 +37,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Muestras crudas (x, y, z) devueltas por sesion en /api/compare, para no
+# mandar sesiones enteras cuando hay muchas muestras por tiro.
+MAX_COMPARE_SAMPLES_PER_SESSION = 200
+MAX_COMPARE_SAMPLES_TOTAL = 2000
+
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -53,25 +58,25 @@ def health() -> dict:
 
 
 @app.post(
-    "/api/sesion",
+    "/api/upload",
     response_model=SesionOutput,
     responses={400: {"model": ErrorResponse}},
 )
-async def crear_sesion(
-    archivo: UploadFile = File(..., description="Log BLE crudo exportado de nRF Connect"),
+async def upload_sesion(
+    file: UploadFile = File(..., description="Log BLE crudo exportado de nRF Connect"),
     session_id: Optional[str] = None,
 ) -> dict:
-    content = await archivo.read()
+    content = await file.read()
 
     ok, errors = validate_raw_upload(content)
     if not ok:
-        logger.info("Upload rechazado (%s): %s", archivo.filename, errors)
+        logger.info("Upload rechazado (%s): %s", file.filename, errors)
         raise HTTPException(status_code=400, detail={"detail": "Archivo invalido", "errors": errors})
 
     try:
         df, resolved_session_id = processors.process_raw_log(content.decode("utf-8"), session_id)
     except ValueError as exc:
-        logger.info("No se pudo procesar %s: %s", archivo.filename, exc)
+        logger.info("No se pudo procesar %s: %s", file.filename, exc)
         raise HTTPException(status_code=400, detail={"detail": str(exc), "errors": [str(exc)]})
 
     ok, errors = validate_dataframe(df)
@@ -87,18 +92,23 @@ async def crear_sesion(
 
     logger.info(
         "Sesion %s guardada: %s tiros, %s%% efectividad",
-        resolved_session_id, summary["total_tiros"], summary["efectividad"],
+        resolved_session_id, summary["num_tiros"], summary["efectividad"],
     )
     return summary
 
 
-@app.get("/api/sesiones", response_model=List[SesionResumen])
-def listar_sesiones() -> list:
-    return database.list_sessions()
+@app.get("/api/sessions", response_model=List[SesionResumen])
+def listar_sesiones(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    order: str = "desc",
+) -> list:
+    return database.list_sessions(date_from=date_from, date_to=date_to, sort_by=sort_by, order=order)
 
 
 @app.get(
-    "/api/sesion/{session_id}",
+    "/api/sessions/{session_id}",
     response_model=SesionOutput,
     responses={404: {"model": ErrorResponse}},
 )
@@ -118,5 +128,32 @@ def detalle_sesion(session_id: str) -> dict:
         )
 
     summary = processors.compute_session_summary(df, session_id)
-    summary["fecha"] = row["fecha"]
+    summary["date"] = row["date"]
     return summary
+
+
+@app.get("/api/compare", response_model=CompareOutput)
+def comparar_sesiones() -> dict:
+    """Datos agregados de todas las sesiones para los graficos de comparativas."""
+    compare_sessions = []
+    samples: List[dict] = []
+
+    for row in database.list_sessions(sort_by="date", order="asc"):
+        df = database.get_session_dataframe(row["session_id"])
+        if df is None:
+            continue
+
+        tiros = processors.compute_tiro_metrics(df)
+        compare_sessions.append({
+            "session_id": row["session_id"],
+            "date": row["date"],
+            "efectividad": row["efectividad"],
+            "potencias": [t["potencia_avg"] for t in tiros],
+        })
+
+        if len(samples) < MAX_COMPARE_SAMPLES_TOTAL:
+            restantes = MAX_COMPARE_SAMPLES_TOTAL - len(samples)
+            n = min(MAX_COMPARE_SAMPLES_PER_SESSION, restantes)
+            samples.extend(df[["x", "y", "z"]].head(n).to_dict(orient="records"))
+
+    return {"sessions": compare_sessions, "samples": samples}
