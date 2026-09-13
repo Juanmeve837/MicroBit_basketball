@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import UploadForm from "../components/UploadForm.jsx";
 import SessionHistory from "../components/SessionHistory.jsx";
-import { getSessions } from "../services/api.js";
-import { getCached, setCached } from "../services/sessionCache.js";
+import { deleteSession, getSessions } from "../services/api.js";
+import { getCached, invalidate, setCached } from "../services/sessionCache.js";
 
 export default function Home() {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -39,6 +40,19 @@ export default function Home() {
     };
   }, []);
 
+  async function handleDelete(sessionId) {
+    setDeleteError("");
+    const previous = sessions;
+    setSessions((prev) => prev.filter((s) => s.session_id !== sessionId));
+    try {
+      await deleteSession(sessionId);
+      invalidate("sessions");
+    } catch (err) {
+      setSessions(previous);
+      setDeleteError(err.message);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <UploadForm />
@@ -49,7 +63,12 @@ export default function Home() {
           No se pudieron cargar las sesiones: {error}
         </p>
       )}
-      {!loading && !error && <SessionHistory sessions={sessions} />}
+      {deleteError && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">
+          No se pudo borrar la sesión: {deleteError}
+        </p>
+      )}
+      {!loading && !error && <SessionHistory sessions={sessions} onDelete={handleDelete} />}
     </div>
   );
 }

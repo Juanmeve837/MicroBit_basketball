@@ -123,6 +123,22 @@ def save_session(df: pd.DataFrame, summary: Dict[str, Any]) -> None:
         conn.close()
 
 
+def delete_session(session_id: str) -> bool:
+    """Borra una sesion y sus tiros asociados. Devuelve False si no existia."""
+    conn = _connect()
+    try:
+        if not _session_exists(conn, session_id):
+            return False
+
+        cur = conn.cursor()
+        cur.execute("DELETE FROM shots WHERE session = ?", (session_id,))
+        cur.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
 def list_sessions(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
