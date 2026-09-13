@@ -132,6 +132,21 @@ def detalle_sesion(session_id: str) -> dict:
     return summary
 
 
+@app.delete(
+    "/api/sessions/{session_id}",
+    responses={404: {"model": ErrorResponse}},
+)
+def borrar_sesion(session_id: str) -> dict:
+    deleted = database.delete_session(session_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": f"Sesion '{session_id}' no encontrada", "errors": []},
+        )
+    logger.info("Sesion %s borrada", session_id)
+    return {"status": "ok", "session_id": session_id}
+
+
 @app.get("/api/compare", response_model=CompareOutput)
 def comparar_sesiones() -> dict:
     """Datos agregados de todas las sesiones para los graficos de comparativas."""

@@ -130,6 +130,26 @@ def test_comparar_sesiones(sample_raw_log):
     assert len(body["samples"]) == 4  # 2 tiros x 2 muestras cada uno
 
 
+def test_borrar_sesion(sample_raw_log):
+    client.post(
+        "/api/upload",
+        files={"file": ("log.csv", sample_raw_log, "text/csv")},
+        params={"session_id": "api-test-delete"},
+    )
+    resp = client.delete("/api/sessions/api-test-delete")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok", "session_id": "api-test-delete"}
+
+    assert client.get("/api/sessions/api-test-delete").status_code == 404
+    ids = [row["session_id"] for row in client.get("/api/sessions").json()]
+    assert "api-test-delete" not in ids
+
+
+def test_borrar_sesion_not_found():
+    resp = client.delete("/api/sessions/no-existe")
+    assert resp.status_code == 404
+
+
 def test_comparar_sesiones_empty():
     resp = client.get("/api/compare")
     assert resp.status_code == 200

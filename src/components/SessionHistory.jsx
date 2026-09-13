@@ -9,12 +9,20 @@ const COLUMNS = [
   { key: "potencia_avg", label: "Potencia avg" },
 ];
 
-export default function SessionHistory({ sessions }) {
+export default function SessionHistory({ sessions, onDelete }) {
   const [sortKey, setSortKey] = useState("date");
   const [sortDir, setSortDir] = useState("desc");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const navigate = useNavigate();
+
+  const handleDelete = (e, sessionId) => {
+    e.stopPropagation();
+    if (!onDelete) return;
+    if (window.confirm(`¿Borrar la sesión "${sessionId}"? Esta acción no se puede deshacer.`)) {
+      onDelete(sessionId);
+    }
+  };
 
   const filtered = useMemo(() => {
     return sessions.filter((s) => {
@@ -85,12 +93,13 @@ export default function SessionHistory({ sessions }) {
                   {sortKey === col.key && (sortDir === "asc" ? " ▲" : " ▼")}
                 </th>
               ))}
+              <th className="py-2 px-2" />
             </tr>
           </thead>
           <tbody>
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={COLUMNS.length} className="py-6 text-center text-slate-400">
+                <td colSpan={COLUMNS.length + 1} className="py-6 text-center text-slate-400">
                   No hay sesiones para mostrar.
                 </td>
               </tr>
@@ -106,6 +115,15 @@ export default function SessionHistory({ sessions }) {
                 <td className="py-2 px-2">{s.num_tiros}</td>
                 <td className="py-2 px-2">{s.efectividad}%</td>
                 <td className="py-2 px-2">{s.potencia_avg}</td>
+                <td className="py-2 px-2 text-right">
+                  <button
+                    type="button"
+                    onClick={(e) => handleDelete(e, s.session_id)}
+                    className="text-xs text-red-500 hover:text-red-700 hover:underline"
+                  >
+                    Borrar
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

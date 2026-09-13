@@ -43,6 +43,11 @@ export async function getSession(sessionId) {
   return data;
 }
 
+export async function deleteSession(sessionId) {
+  const { data } = await client.delete(`/sessions/${sessionId}`);
+  return data;
+}
+
 export async function getCompareData() {
   const { data } = await client.get("/compare");
   return data;
