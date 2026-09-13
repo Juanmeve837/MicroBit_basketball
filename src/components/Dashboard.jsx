@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import KPICard from "./KPICard.jsx";
-import { AxisStatsChart, PotenciaBarChart } from "./Charts.jsx";
+import { AxisBiomechanicsChart, PotenciaBarChart } from "./Charts.jsx";
 
 const SHOT_COLUMNS = [
   { key: "tiro", label: "Tiro" },
@@ -55,7 +55,10 @@ export default function Dashboard({ session }) {
 
       <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
         <h3 className="font-semibold mb-2">Estadísticas por eje</h3>
-        <AxisStatsChart axisStats={session.axis_stats || {}} />
+        <p className="text-xs text-slate-400 mb-3">
+          Comparación de la aceleración media por eje entre tiros CESTA y FALLO.
+        </p>
+        <AxisBiomechanicsChart axisBiomechanics={session.axis_biomechanics || {}} />
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4">

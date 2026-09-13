@@ -2,6 +2,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -11,6 +12,8 @@ import {
 } from "recharts";
 
 const AXIS_COLORS = { x: "#ea580c", y: "#0ea5e9", z: "#16a34a" };
+const CESTA_COLOR = "#16a34a";
+const FALLO_COLOR = "#dc2626";
 
 export function PotenciaBarChart({ tiros }) {
   const data = tiros.map((t) => ({
@@ -33,23 +36,59 @@ export function PotenciaBarChart({ tiros }) {
   );
 }
 
-export function AxisStatsChart({ axisStats }) {
-  const data = ["x", "y", "z"].map((axis) => ({
-    axis: axis.toUpperCase(),
-    mean: axisStats[axis]?.mean ?? 0,
-    std: axisStats[axis]?.std ?? 0,
-  }));
+const AXIS_BIOMECHANICS_INFO = {
+  x: { label: "Desviación lateral", hint: "izq/der", unit: "mg" },
+  y: { label: "Elevación vertical", hint: "arriba/abajo", unit: "mg" },
+  z: { label: "Extensión al aro", hint: "follow-through", unit: "mg" },
+};
+
+export function AxisBiomechanicsChart({ axisBiomechanics }) {
+  const axes = ["x", "y", "z"];
+  const hasData = axes.some(
+    (axis) => axisBiomechanics?.[axis]?.cesta || axisBiomechanics?.[axis]?.fallo
+  );
+
+  if (!hasData) {
+    return <p className="text-sm text-slate-400">Sin datos suficientes para el análisis por eje.</p>;
+  }
 
   return (
-    <ResponsiveContainer width="100%" height={240}>
-      <BarChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-        <XAxis dataKey="axis" tick={{ fontSize: 12 }} />
-        <YAxis tick={{ fontSize: 12 }} />
-        <Tooltip />
-        <Bar dataKey="mean" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {axes.map((axis) => {
+        const info = AXIS_BIOMECHANICS_INFO[axis];
+        const cesta = axisBiomechanics[axis]?.cesta ?? { mean: 0, std: 0 };
+        const fallo = axisBiomechanics[axis]?.fallo ?? { mean: 0, std: 0 };
+        const data = [
+          { resultado: "CESTA", mean: cesta.mean },
+          { resultado: "FALLO", mean: fallo.mean },
+        ];
+        const diff = fallo.mean - cesta.mean;
+
+        return (
+          <div key={axis} className="border border-slate-200 rounded-lg p-3">
+            <p className="text-sm font-semibold text-slate-700">
+              Eje {axis.toUpperCase()} <span className="font-normal text-slate-400">— {info.hint}</span>
+            </p>
+            <ResponsiveContainer width="100%" height={120}>
+              <BarChart data={data} layout="vertical" margin={{ left: 8, right: 8 }}>
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="resultado" tick={{ fontSize: 11 }} width={48} />
+                <Tooltip formatter={(v) => `${v} ${info.unit}`} />
+                <Bar dataKey="mean" radius={[0, 4, 4, 0]}>
+                  {data.map((d) => (
+                    <Cell key={d.resultado} fill={d.resultado === "CESTA" ? CESTA_COLOR : FALLO_COLOR} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <p className="text-xs text-slate-500 mt-1">
+              {info.label}: fallos {diff >= 0 ? "+" : ""}
+              {diff.toFixed(0)} {info.unit} vs. cestas
+            </p>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

@@ -41,6 +41,17 @@ class AxisStats(BaseModel):
     z: AxisStat
 
 
+class AxisStatByResult(BaseModel):
+    cesta: AxisStat
+    fallo: AxisStat
+
+
+class AxisBiomechanics(BaseModel):
+    x: AxisStatByResult
+    y: AxisStatByResult
+    z: AxisStatByResult
+
+
 class SesionResumen(BaseModel):
     """Fila resumida usada en el listado GET /api/sessions."""
 
@@ -57,6 +68,7 @@ class SesionOutput(SesionResumen):
 
     consistencia: float
     axis_stats: AxisStats
+    axis_biomechanics: AxisBiomechanics
     tiros: List[TiroData]
 
 
