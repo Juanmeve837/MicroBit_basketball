@@ -171,7 +171,7 @@ frontend.
 - **FastAPI** (Python 3.11)
 - **Pandas / NumPy** — parseo del log BLE y calculo de metricas
 - **Pydantic** — esquemas de request/response
-- **Persistencia por archivos** — CSV por sesion + indice JSON en `data/`
+- **Persistencia** — SQLite via [libSQL](https://docs.turso.tech/libsql) (archivo local en dev/tests, Turso remoto en produccion)
 - **Pytest** — tests unitarios y de integracion (TestClient)
 
 ### Estructura
@@ -181,7 +181,7 @@ main.py            App FastAPI y endpoints
 models.py          Esquemas Pydantic (SessionInput, SesionOutput, TiroData, ErrorResponse)
 processors.py       Parseo BLE (D/E/B) + calculo de metricas por tiro/sesion
 validators.py       Validacion de upload crudo y del DataFrame resultante
-database.py         Persistencia: CSV por sesion + indice JSON, previene duplicados
+database.py         Persistencia: SQLite/libSQL (tablas sessions + shots), previene duplicados
 conftest.py         Hace importables los modulos de la raiz desde tests/
 Procfile            Comando de arranque para Render
 render.yaml         Blueprint de deploy para Render (free tier)
@@ -231,7 +231,7 @@ curl -X POST http://localhost:8000/api/upload \
 4. **Metricas** (`processors.compute_session_summary` / `compute_tiro_metrics`):
    - Por tiro: `potencia_max/avg/min`, `cesta`.
    - Por sesion: `efectividad`, `potencia_avg`, `consistencia` (indice 0-100 basado en el coeficiente de variacion de la potencia entre tiros — 100 = misma potencia en todos los tiros), `axis_stats` (media/desviacion de `x`, `y`, `z`).
-5. **Persistencia** (`database.save_session`) — CSV en `data/processed/{session_id}.csv` + fila en `data/index.json`. Un `session_id` repetido devuelve **400** en vez de sobrescribir.
+5. **Persistencia** (`database.save_session`) — fila en la tabla `sessions` + filas en `shots` (SQLite/libSQL). Un `session_id` repetido devuelve **400** en vez de sobrescribir.
 
 ### Manejo de errores
 
@@ -266,12 +266,23 @@ GitHub Pages solo sirve estatico, asi que este backend se despliega aparte
    configurala como `VITE_API_URL=https://<nombre>.onrender.com/api` en el
    frontend (ver sección Frontend → Deploy).
 
-**Limitacion del free tier**: el filesystem es efimero — `data/processed/` y
-`data/index.json` se pierden en cada redeploy o cuando el servicio se duerme
-por inactividad y vuelve a arrancar. Para una v1 de demo esta bien; antes de
-un uso real hay que migrar la persistencia a un servicio externo (ej. un
-volumen persistente, SQLite en un disco montado, o una base de datos
-gestionada).
+**Persistencia (Turso)**: el filesystem de Render free tier es efimero — un
+archivo SQLite local se perderia en cada redeploy o cuando el servicio se
+duerme por inactividad. Por eso `database.py` usa [Turso](https://turso.tech)
+(libSQL) en produccion, que persiste los datos gratis fuera del filesystem
+del servicio:
+
+1. Crear cuenta en [turso.tech](https://turso.tech) y una base de datos:
+   `turso db create basket-tracker`.
+2. Obtener la URL de conexion: `turso db show basket-tracker --url`.
+3. Generar un token: `turso db tokens create basket-tracker`.
+4. En Render, agregar `TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN` como
+   variables de entorno (Environment → Secret File o Environment Variables)
+   con los valores de los pasos 2 y 3.
+
+Sin estas dos variables seteadas, `database.py` cae automaticamente a un
+archivo SQLite local (`data/db/basket.db`) — asi es como corren los tests y
+el desarrollo local, sin necesidad de una cuenta de Turso.
 
 ## Frontend (React + Vite)
 
@@ -332,5 +343,6 @@ Notas de la config para que funcione bajo un subpath de GitHub Pages
 - [ ] Modelo de ML para predicción de acierto (rama `feature/ml-predictor`, dependencias `scikit-learn`/`joblib` ya incluidas)
 - [ ] Captura en vivo por Web Bluetooth desde el navegador (rama `feature/web-bluetooth`)
 - [ ] Rate limiting en el backend (opcional, no bloqueante para el MVP)
-- [ ] Migrar la persistencia del backend de CSV+JSON a SQLite o una base de datos gestionada (necesario en Render free tier, ver limitación arriba)
+- [x] Migrar la persistencia del backend de CSV+JSON a SQLite/Turso (ver sección Backend → Deploy)
+- [ ] Migrar `scripts/construir_bd_tiros.py` y el notebook de análisis a la misma base de datos (hoy siguen usando CSVs locales, fuera del alcance de la API desplegada)
 - [ ] Restringir CORS del backend al dominio de GitHub Pages antes de un uso real (hoy abierto con `allow_origins=["*"]`)

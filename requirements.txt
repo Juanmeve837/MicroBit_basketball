@@ -21,6 +21,7 @@ fastapi>=0.110
 uvicorn[standard]>=0.29
 pydantic>=2.6
 python-multipart>=0.0.9
+libsql>=0.1.11
 
 # Tests
 pytest>=8.0

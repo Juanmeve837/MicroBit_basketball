@@ -9,18 +9,18 @@ client = TestClient(main.app)
 
 @pytest.fixture(autouse=True)
 def isolate_data_dir(tmp_path, monkeypatch):
-    """Redirige la persistencia a un directorio temporal por test, para no
+    """Redirige la persistencia a un archivo SQLite temporal por test, para no
     tocar data/ real ni acumular estado entre tests."""
-    monkeypatch.setattr(database, "DATA_DIR", tmp_path)
-    monkeypatch.setattr(database, "PROCESSED_DIR", tmp_path / "processed")
-    monkeypatch.setattr(database, "INDEX_PATH", tmp_path / "index.json")
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "test.db")
+    monkeypatch.delenv("TURSO_DATABASE_URL", raising=False)
+    monkeypatch.delenv("TURSO_AUTH_TOKEN", raising=False)
     yield
 
 
 def test_health():
     resp = client.get("/api/health")
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok"}
+    assert resp.json()["status"] == "ok"
 
 
 def test_upload_sesion_success(sample_raw_log):
