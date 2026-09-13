@@ -8,7 +8,6 @@ Correr con:
 """
 
 import logging
-import os
 from typing import List, Optional
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -55,10 +54,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 @app.get("/api/health")
 def health() -> dict:
-    # db_backend es diagnostico temporal (no expone secretos, solo si la env
-    # var esta presente) para depurar la migracion a Turso - ver database.py.
-    db_backend = "turso" if os.environ.get("TURSO_DATABASE_URL") else "local_sqlite_fallback"
-    return {"status": "ok", "db_backend": db_backend}
+    return {"status": "ok"}
 
 
 @app.post(

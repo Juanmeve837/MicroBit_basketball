@@ -258,7 +258,11 @@ GitHub Pages solo sirve estatico, asi que este backend se despliega aparte
 
 1. En [render.com](https://render.com) → **New +** → **Blueprint**, conecta el
    repo `MicroBit_basketball` y selecciona la rama a desplegar (`main`).
-   Render detecta `render.yaml` automaticamente.
+   Render detecta `render.yaml` automaticamente. **Importante**: verificar en
+   Render → Settings → Build & Deploy qué rama está configurada realmente —
+   si el servicio se creó apuntando a una rama de feature (ej.
+   `feature/backend-api`) en vez de `main`, los cambios en `main` nunca
+   llegan a producción aunque el push se vea exitoso (ver Troubleshooting).
 2. Si preferis configurarlo a mano en vez del Blueprint: **New +** → **Web
    Service**, build command `pip install -r requirements.txt`, start command
    `uvicorn main:app --host 0.0.0.0 --port $PORT`.
@@ -283,6 +287,28 @@ del servicio:
 Sin estas dos variables seteadas, `database.py` cae automaticamente a un
 archivo SQLite local (`data/db/basket.db`) — asi es como corren los tests y
 el desarrollo local, sin necesidad de una cuenta de Turso.
+
+#### Troubleshooting: el deploy no refleja los últimos commits
+
+Si `main` tiene commits nuevos pero el comportamiento en producción sigue
+siendo el viejo (por ejemplo, la migración a Turso de arriba: las sesiones
+subidas desaparecían después de cada redeploy pese a que las env vars
+estaban bien cargadas), lo primero a revisar es **qué rama está desplegando
+Render**, no el código:
+
+1. En Render → el servicio → Settings → Build & Deploy, confirmar la rama.
+2. Si es distinta de `main` (ej. quedó apuntando a una rama de feature desde
+   la creación inicial del servicio), sincronizarla:
+   `git push origin main:<rama-que-usa-render>` (fast-forward, seguro si esa
+   rama no tiene commits propios que `main` no tenga — verificar primero con
+   `git rev-list --left-right --count origin/main...origin/<rama>`).
+3. Confirmar el deploy correcto sin adivinar: se agregó temporalmente un
+   campo `db_backend` (`"turso"` / `"local_sqlite_fallback"`) a la respuesta
+   de `/api/health` durante esta migración para verificar desde afuera qué
+   backend estaba realmente activo, sin depender de logs. Se quitó una vez
+   confirmado — reintroducir el mismo patrón (leer `os.environ` y devolverlo
+   en un endpoint de solo lectura, sin exponer secretos) es la forma más
+   rápida de depurar un caso similar a futuro.
 
 ## Frontend (React + Vite)
 

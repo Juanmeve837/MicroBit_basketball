@@ -20,7 +20,7 @@ def isolate_data_dir(tmp_path, monkeypatch):
 def test_health():
     resp = client.get("/api/health")
     assert resp.status_code == 200
-    assert resp.json()["status"] == "ok"
+    assert resp.json() == {"status": "ok"}
 
 
 def test_upload_sesion_success(sample_raw_log):
