@@ -62,6 +62,20 @@ def test_compute_session_summary(sample_raw_log):
     assert set(summary["axis_stats"].keys()) == {"x", "y", "z"}
     assert summary["axis_stats"]["x"]["mean"] == 3.0
     assert summary["axis_stats"]["x"]["std"] == 0.0
+    assert set(summary["axis_biomechanics"].keys()) == {"x", "y", "z"}
+    assert set(summary["axis_biomechanics"]["x"].keys()) == {"cesta", "fallo"}
+    assert summary["axis_biomechanics"]["x"]["cesta"]["mean"] == 3.0
+    assert summary["axis_biomechanics"]["x"]["fallo"]["mean"] == 3.0
+
+
+def test_compute_axis_biomechanics_splits_by_resultado(sample_raw_log):
+    df, _ = processors.process_raw_log(sample_raw_log, session_id="test-session")
+    biomechanics = processors.compute_axis_biomechanics(df)
+
+    assert biomechanics["y"]["cesta"]["mean"] == 4.0
+    assert biomechanics["y"]["fallo"]["mean"] == 4.0
+    assert biomechanics["z"]["cesta"]["mean"] == 0.0
+    assert biomechanics["z"]["fallo"]["mean"] == 0.0
 
 
 def test_compute_consistencia_lower_when_potencia_varies():

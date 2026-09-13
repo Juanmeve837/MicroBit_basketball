@@ -165,6 +165,26 @@ def compute_axis_stats(df: pd.DataFrame) -> Dict[str, Dict[str, float]]:
     return stats
 
 
+def compute_axis_biomechanics(df: pd.DataFrame) -> Dict[str, Dict[str, Dict[str, float]]]:
+    """Media y desviacion estandar de cada eje (x, y, z), separadas por resultado
+    (cesta/fallo), para comparar el patron de movimiento entre tiros acertados y
+    fallados."""
+    biomechanics: Dict[str, Dict[str, Dict[str, float]]] = {}
+    for axis in ("x", "y", "z"):
+        por_resultado: Dict[str, Dict[str, float]] = {}
+        for label, flag in (("cesta", 1), ("fallo", 0)):
+            serie = df.loc[df["cesta"] == flag, axis]
+            mean = float(serie.mean()) if not serie.empty else 0.0
+            std = float(serie.std()) if len(serie) > 1 else 0.0
+            if pd.isna(mean):
+                mean = 0.0
+            if pd.isna(std):
+                std = 0.0
+            por_resultado[label] = {"mean": round(mean, 2), "std": round(std, 2)}
+        biomechanics[axis] = por_resultado
+    return biomechanics
+
+
 def compute_session_summary(df: pd.DataFrame, session_id: str) -> Dict[str, Any]:
     """Calcula los KPIs de sesion (efectividad, potencia, consistencia, ejes) + metricas por tiro."""
     tiros = compute_tiro_metrics(df)
@@ -182,5 +202,6 @@ def compute_session_summary(df: pd.DataFrame, session_id: str) -> Dict[str, Any]
         "potencia_avg": potencia_avg,
         "consistencia": compute_consistencia(tiros),
         "axis_stats": compute_axis_stats(df),
+        "axis_biomechanics": compute_axis_biomechanics(df),
         "tiros": tiros,
     }
