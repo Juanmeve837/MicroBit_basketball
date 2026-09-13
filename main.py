@@ -8,6 +8,7 @@ Correr con:
 """
 
 import logging
+import os
 from typing import List, Optional
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -54,7 +55,11 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok"}
+    # RENDER_GIT_COMMIT lo setea Render automaticamente en cada deploy con el
+    # SHA del commit desplegado. Permite confirmar desde afuera que rama/commit
+    # esta realmente corriendo en produccion, sin adivinar (ver incidente de
+    # deploy desincronizado documentado en el README).
+    return {"status": "ok", "commit": os.environ.get("RENDER_GIT_COMMIT")}
 
 
 @app.post(

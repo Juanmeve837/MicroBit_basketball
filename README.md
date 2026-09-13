@@ -309,6 +309,11 @@ Render**, no el código:
    confirmado — reintroducir el mismo patrón (leer `os.environ` y devolverlo
    en un endpoint de solo lectura, sin exponer secretos) es la forma más
    rápida de depurar un caso similar a futuro.
+4. En vez de reintroducirlo cada vez, `/api/health` expone permanentemente
+   `commit` con el valor de `RENDER_GIT_COMMIT` (variable que Render setea
+   sola en cada deploy con el SHA desplegado). Comparar ese valor contra
+   `git rev-parse main` confirma en segundos si producción corresponde al
+   último commit de `main`, sin depender de logs ni de adivinar la rama.
 
 ## Frontend (React + Vite)
 
