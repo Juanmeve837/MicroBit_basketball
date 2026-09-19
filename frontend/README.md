@@ -63,9 +63,27 @@ El firmware no envía número de tiro; `useBluetooth.js` lo cuenta localmente
 `utils/parsers.py::build_dataframe` para poder reasignar `BASKET` incluso si
 llega antes o después del `END`.
 
+## Uso con la micro:bit: cebar con B
+
+El firmware actual tiene un quirk sin resolver: si la **primera** pulsación
+tras conectar es **A**, la placa muestra el error **020** (sin memoria) y no
+deja capturar. Workaround: pulsar **B** una vez antes de la primera A, tanto
+al conectar como tras cada reconexión.
+
+- El frontend ignora esa B de cebado: una B solo cuenta si llegó al menos una
+  muestra desde el inicio de la sesión o desde la última reconexión. Las B
+  ignoradas se muestran como aviso en el indicador de datos.
+- Un tiro va de A a A; B marca canasta del último tiro con datos.
+- **Nueva sesión** reinicia el buffer y el `session_id` sin desconectar la placa.
+- Probado y peor (no repetir): handlers `onBluetoothConnected/Disconnected`
+  y enviar `x,y,z` en una sola escritura UART; ambos producen 020 incluso
+  cebando. Referencia: `utils/microbit_lanzamiento.js`.
+- Reconexión: `attachRx` deja un solo listener por característica y se
+  descarta la línea parcial pendiente; evita el flujo de "líneas corruptas".
+
 ## Backend
 
-`services/api.js` asume `POST {VITE_API_URL}/api/sesion` con un
+`services/api.js` hace `POST {VITE_API_URL}/api/sesion` con un
 `multipart/form-data` (`session_id`, `file`). **El backend FastAPI todavía
 no está implementado en este repo** (ver `config/config.yaml` sección `api`
 y el README raíz, "Pendiente"). Hasta que exista, "Guardar sesión" fallará

@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import {
   connectToMicrobit,
+  attachRx,
   disconnectFromMicrobit,
   UART_SERVICE_UUID,
   UART_RX_CHARACTERISTIC_UUID,
@@ -38,12 +39,16 @@ export function useBluetooth() {
   const [basketCount, setBasketCount] = useState(0);
   const [error, setError] = useState(null);
   const [invalidLineCount, setInvalidLineCount] = useState(0);
+  const [ignoredBasketCount, setIgnoredBasketCount] = useState(0);
 
   const deviceRef = useRef(null);
   const lineBufferRef = useRef(new LineBuffer());
   const cestaPorTiroRef = useRef(new Map());
   const currentTiroRef = useRef(1);
   const ultimoTiroRef = useRef(null);
+  // Un B solo vale si llego una muestra desde el (re)inicio de sesion o de la
+  // conexion: un B de "cebado" al conectar no debe marcar canasta a un tiro previo.
+  const basketArmedRef = useRef(false);
   const sessionIdRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
   const intentionalDisconnectRef = useRef(false);
@@ -53,17 +58,20 @@ export function useBluetooth() {
     cestaPorTiroRef.current = new Map();
     currentTiroRef.current = 1;
     ultimoTiroRef.current = null;
+    basketArmedRef.current = false;
     sessionIdRef.current = generateSessionId();
     setSamples([]);
     setShotCount(0);
     setBasketCount(0);
     setInvalidLineCount(0);
+    setIgnoredBasketCount(0);
     setError(null);
   }, []);
 
   const handleLine = useCallback((linea) => {
     const evento = parseLine(linea);
     if (!evento) {
+      console.warn("[ble] linea corrupta:", JSON.stringify(linea));
       setInvalidLineCount((n) => n + 1);
       return;
     }
@@ -71,6 +79,7 @@ export function useBluetooth() {
     if (evento.type === EVENT_TYPES.DATA) {
       const tiro = currentTiroRef.current;
       ultimoTiroRef.current = tiro;
+      basketArmedRef.current = true;
       const sample = { timestamp: nowTimestamp(), tiro, x: evento.x, y: evento.y, z: evento.z };
       setSamples((prev) => [...prev, sample]);
     } else if (evento.type === EVENT_TYPES.END) {
@@ -84,7 +93,9 @@ export function useBluetooth() {
       }
     } else if (evento.type === EVENT_TYPES.BASKET) {
       const tiro = ultimoTiroRef.current;
-      if (tiro !== null) {
+      if (tiro === null || !basketArmedRef.current) {
+        setIgnoredBasketCount((n) => n + 1);
+      } else {
         const eraCesta = cestaPorTiroRef.current.get(tiro) === 1;
         cestaPorTiroRef.current.set(tiro, 1);
         setShotCount(cestaPorTiroRef.current.size);
@@ -120,12 +131,11 @@ export function useBluetooth() {
       const server = await deviceRef.current.gatt.connect();
       const service = await server.getPrimaryService(UART_SERVICE_UUID);
       const rx = await service.getCharacteristic(UART_RX_CHARACTERISTIC_UUID);
-      const decoder = new TextDecoder("utf-8");
-      rx.addEventListener("characteristicvaluechanged", (event) => {
-        handleData(decoder.decode(event.target.value));
-      });
-      await rx.startNotifications();
+      // Descarta media linea pendiente de antes de la caida.
+      lineBufferRef.current = new LineBuffer();
+      await attachRx(rx, handleData);
       reconnectAttemptsRef.current = 0;
+      basketArmedRef.current = false;
       setStatus(CONNECTION_STATUS.CONNECTED);
     } catch (err) {
       attemptReconnect();
@@ -177,9 +187,11 @@ export function useBluetooth() {
     shotCount,
     basketCount,
     invalidLineCount,
+    ignoredBasketCount,
     error,
     sessionId: sessionIdRef.current,
     connect,
+    newSession: resetSessionState,
     disconnect,
     getCsv,
   };

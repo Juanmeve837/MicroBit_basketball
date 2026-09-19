@@ -1,4 +1,4 @@
-export default function DataIndicator({ sampleCount, shotCount, basketCount, invalidLineCount }) {
+export default function DataIndicator({ sampleCount, shotCount, basketCount, invalidLineCount, ignoredBasketCount = 0 }) {
   const porcentaje = shotCount > 0 ? Math.round((basketCount / shotCount) * 100) : 0;
 
   return (
@@ -21,6 +21,12 @@ export default function DataIndicator({ sampleCount, shotCount, basketCount, inv
         <div className="stat stat-warning">
           <span className="stat-value">{invalidLineCount}</span>
           <span className="stat-label">líneas corruptas</span>
+        </div>
+      )}
+      {ignoredBasketCount > 0 && (
+        <div className="stat stat-warning">
+          <span className="stat-value">{ignoredBasketCount}</span>
+          <span className="stat-label">B ignoradas (sin tiro previo)</span>
         </div>
       )}
     </div>

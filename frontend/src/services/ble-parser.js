@@ -3,8 +3,8 @@
 //
 // Formato de línea enviado por el firmware (utils/microbit_lanzamiento.js):
 //   "x,y,z"   → muestra de aceleración (evento DATA)
-//   "END"     → fin de tiro (botón A)
-//   "BASKET"  → canasta (botón B)
+//   "E"/"END"       → fin de tiro (botón A, 2ª pulsación: un tiro va de A a A)
+//   "B"/"BASKET"    → canasta del último tiro con datos (botón B)
 
 export const EVENT_TYPES = {
   DATA: "DATA",
@@ -46,10 +46,11 @@ export class LineBuffer {
  * válida (línea corrupta / formato inesperado).
  */
 export function parseLine(linea) {
-  if (linea === "END") {
+  // El firmware desplegado manda "E"/"B"; el del repo manda "END"/"BASKET".
+  if (linea === "E" || linea === "END") {
     return { type: EVENT_TYPES.END };
   }
-  if (linea === "BASKET") {
+  if (linea === "B" || linea === "BASKET") {
     return { type: EVENT_TYPES.BASKET };
   }
 

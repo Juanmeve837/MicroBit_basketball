@@ -4,8 +4,8 @@
 // Safari no lo soporta). La página debe servirse por HTTPS o localhost.
 
 export const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-export const UART_TX_CHARACTERISTIC_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // escribir hacia micro:bit
-export const UART_RX_CHARACTERISTIC_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // notificaciones desde micro:bit
+export const UART_TX_CHARACTERISTIC_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // escribir hacia micro:bit (write)
+export const UART_RX_CHARACTERISTIC_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // datos desde micro:bit (indicate)
 
 export function isWebBluetoothSupported() {
   return typeof navigator !== "undefined" && !!navigator.bluetooth;
@@ -21,6 +21,22 @@ function wrapGattError(err) {
     return new Error(PAIRING_HINT);
   }
   return err instanceof Error ? err : new Error(msg);
+}
+
+// Un solo listener por caracteristica: al reconectar, Chrome puede devolver el
+// mismo objeto y un addEventListener extra duplicaria cada fragmento.
+const rxHandlers = new WeakMap();
+
+export async function attachRx(rxCharacteristic, onData) {
+  const previous = rxHandlers.get(rxCharacteristic);
+  if (previous) {
+    rxCharacteristic.removeEventListener("characteristicvaluechanged", previous);
+  }
+  const decoder = new TextDecoder("utf-8");
+  const handler = (event) => onData?.(decoder.decode(event.target.value));
+  rxHandlers.set(rxCharacteristic, handler);
+  rxCharacteristic.addEventListener("characteristicvaluechanged", handler);
+  await rxCharacteristic.startNotifications();
 }
 
 /**
@@ -51,12 +67,7 @@ export async function connectToMicrobit({ onData, onDisconnect }) {
     service = await server.getPrimaryService(UART_SERVICE_UUID);
     rxCharacteristic = await service.getCharacteristic(UART_RX_CHARACTERISTIC_UUID);
 
-    const decoder = new TextDecoder("utf-8");
-    rxCharacteristic.addEventListener("characteristicvaluechanged", (event) => {
-      const chunk = decoder.decode(event.target.value);
-      onData?.(chunk);
-    });
-    await rxCharacteristic.startNotifications();
+    await attachRx(rxCharacteristic, onData);
   } catch (err) {
     if (device.gatt.connected) device.gatt.disconnect();
     throw wrapGattError(err);

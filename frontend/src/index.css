@@ -69,6 +69,7 @@ button {
   border-radius: 8px;
   border: 1px solid #ccc;
   background: #f0f0f0;
+  color: #111827;
   cursor: pointer;
 }
 
@@ -79,7 +80,10 @@ button.primary {
 }
 
 button.secondary {
-  background: transparent;
+  background: #fff;
+  color: #b91c1c;
+  border: 2px solid #b91c1c;
+  font-weight: 600;
 }
 
 button:disabled {

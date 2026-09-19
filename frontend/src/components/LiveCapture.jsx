@@ -41,7 +41,7 @@ function PowerChart({ samples }) {
 }
 
 export default function LiveCapture({ bluetooth }) {
-  const { samples, getCsv, sessionId } = bluetooth;
+  const { samples, getCsv, sessionId, newSession } = bluetooth;
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [saveResult, setSaveResult] = useState(null);
@@ -66,6 +66,16 @@ export default function LiveCapture({ bluetooth }) {
     }
   };
 
+  const handleNewSession = () => {
+    if (samples.length > 0 && !saveResult) {
+      const ok = window.confirm("La sesión actual no se ha guardado en el backend. ¿Empezar una nueva de todos modos?");
+      if (!ok) return;
+    }
+    newSession();
+    setSaveError(null);
+    setSaveResult(null);
+  };
+
   return (
     <div className="card live-capture">
       <h2>Captura en vivo</h2>
@@ -78,6 +88,9 @@ export default function LiveCapture({ bluetooth }) {
         </button>
         <button onClick={handleSave} disabled={samples.length === 0 || saving} className="primary">
           {saving ? "Guardando…" : "Guardar sesión"}
+        </button>
+        <button onClick={handleNewSession} disabled={samples.length === 0}>
+          Nueva sesión
         </button>
       </div>
 

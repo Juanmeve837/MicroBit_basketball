@@ -34,6 +34,7 @@ export default function App() {
             shotCount={bluetooth.shotCount}
             basketCount={bluetooth.basketCount}
             invalidLineCount={bluetooth.invalidLineCount}
+            ignoredBasketCount={bluetooth.ignoredBasketCount}
           />
           <LiveCapture bluetooth={bluetooth} />
         </>

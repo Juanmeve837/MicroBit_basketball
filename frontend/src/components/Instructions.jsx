@@ -18,6 +18,11 @@ export default function Instructions() {
           lista (aparece como &quot;BBC micro:bit [xxxxx]&quot;).
         </li>
         <li>
+          <strong>Ceba la placa con B:</strong> tras conectar (y tras cada reconexión) pulsa{" "}
+          <strong>B</strong> una vez <em>antes</em> de la primera A. Si la primera pulsación es A,
+          la micro:bit muestra el error 020. Esa B de cebado no se cuenta como canasta.
+        </li>
+        <li>
           Botón <strong>A</strong> en la micro:bit: inicia/detiene la captura de cada tiro.
           Botón <strong>B</strong>: marca canasta.
         </li>
