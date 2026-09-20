@@ -34,7 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import pandas as pd
 
 from config.config import Config
-from scripts.utils.validators import validate_dataframe
+from utils.validators import validate_dataframe
 
 COLUMNAS = ["timestamp", "session", "tiro", "x", "y", "z", "potencia", "cesta"]
 PATRON_ARCHIVO = re.compile(r"sesion_procesada_(\d+)\.csv$")

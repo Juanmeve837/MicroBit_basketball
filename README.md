@@ -13,7 +13,7 @@ por los notebooks.
 
 ## Flujo del proyecto
 
-1. **Captura** — firmware en la micro:bit (`scripts/utils/microbit_lanzamiento.js`,
+1. **Captura** — firmware en la micro:bit (`utils/microbit_lanzamiento.js`,
    MakeCode) transmite muestras de aceleración por sesión.
 2. **Post-procesamiento** — `scripts/procesar_sesion.py` limpia y estructura
    una sesión cruda BLE (`data/raw/`) en un CSV procesado (`data/processed/`).
@@ -41,9 +41,11 @@ notebooks/        Pipeline en notebooks (02) + archived/
 scripts/
   procesar_sesion.py     Post-procesa un log BLE crudo en CSV limpio
   construir_bd_tiros.py  Une las sesiones procesadas en data/db/BD_tiros.csv
-  utils/          Funciones reutilizables (parsers, validators, paths)
-                  y firmware de referencia (microbit_lanzamiento.js)
   archived/       Planes y documentos superados
+utils/            Funciones reutilizables de los scripts (parsers, validators, paths)
+                  y firmware de referencia (microbit_lanzamiento.js)
+frontend/         Frontend standalone de captura Web Bluetooth (PoC original,
+                  superado por la página #/captura de src/; se conserva como referencia)
 results/
   figures/        Gráficos generados por los notebooks
   tables/         Tablas resumen (CSV)
@@ -99,7 +101,7 @@ Ver [Instalación](#instalación) arriba (`python -m venv .venv` + `pip install 
 
 ### 2. Capturar una sesión con la micro:bit
 
-Flashear `scripts/utils/microbit_lanzamiento.js` a la micro:bit (MakeCode,
+Flashear `utils/microbit_lanzamiento.js` a la micro:bit (MakeCode,
 con *Project Settings → No pairing required*). Un tiro va de **A a A** (la
 primera pulsación inicia la captura, la segunda la detiene y cierra el tiro);
 **B** marca canasta del último tiro. Hay dos caminos, ambos válidos:
