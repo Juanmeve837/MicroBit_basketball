@@ -10,6 +10,8 @@ Correr con:
 import io
 import logging
 import os
+import re
+from datetime import datetime
 from typing import List, Optional
 
 import pandas as pd
@@ -53,6 +55,16 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         status_code=500,
         content={"detail": "Error interno del servidor", "errors": [str(exc)]},
     )
+
+
+def _date_from_session_id(session_id: str) -> Optional[str]:
+    match = re.match(r"^(\d{8})_", session_id)
+    if not match:
+        return None
+    try:
+        return datetime.strptime(match.group(1), "%Y%m%d").strftime("%Y-%m-%d")
+    except ValueError:
+        return None
 
 
 @app.get("/api/health")
@@ -133,6 +145,9 @@ async def sesion_csv(
     resolved_session_id = session_id or str(df["session"].iloc[0])
     df["session"] = resolved_session_id
     summary = processors.compute_session_summary(df, resolved_session_id)
+    # El servidor corre en UTC: la fecha "de hoy" del usuario puede ser distinta.
+    # El ID de sesion ya trae la fecha local del cliente (YYYYMMDD_xxxx).
+    summary["date"] = _date_from_session_id(resolved_session_id) or summary["date"]
     try:
         database.save_session(df, summary)
     except ValueError as exc:

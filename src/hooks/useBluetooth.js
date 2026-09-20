@@ -27,7 +27,9 @@ function nowTimestamp() {
 }
 
 function generateSessionId() {
-  const fecha = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  // Fecha local (no toISOString: es UTC y de noche ya marca el dia siguiente).
+  const d = new Date();
+  const fecha = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
   const uuid = crypto.randomUUID().slice(0, 8).toUpperCase();
   return `${fecha}_${uuid}`;
 }
