@@ -143,9 +143,18 @@ export default function Captura() {
               Desconectar
             </button>
           ) : (
-            <button onClick={bt.connect} disabled={bt.status === CONNECTION_STATUS.CONNECTING} className={btnPrimary}>
-              Conectar a micro:bit
-            </button>
+            <>
+              <button onClick={() => bt.connect()} disabled={bt.status === CONNECTION_STATUS.CONNECTING} className={btnPrimary}>
+                Conectar a micro:bit
+              </button>
+              <button
+                onClick={() => bt.connect({ acceptAll: true })}
+                disabled={bt.status === CONNECTION_STATUS.CONNECTING}
+                className="text-sm text-slate-500 underline hover:text-slate-700"
+              >
+                ¿No aparece? Mostrar todos los dispositivos
+              </button>
+            </>
           )}
         </div>
         {bt.error && (
