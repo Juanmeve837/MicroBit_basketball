@@ -2,6 +2,7 @@ import { NavLink, Route, Routes } from "react-router-dom";
 import Home from "./pages/Home.jsx";
 import SessionDetail from "./pages/SessionDetail.jsx";
 import Compare from "./pages/Compare.jsx";
+import Captura from "./pages/Captura.jsx";
 
 const navLinkClass = ({ isActive }) =>
   `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -22,6 +23,9 @@ export default function App() {
             <NavLink to="/" end className={navLinkClass}>
               Inicio
             </NavLink>
+            <NavLink to="/captura" className={navLinkClass}>
+              Captura en vivo
+            </NavLink>
             <NavLink to="/compare" className={navLinkClass}>
               Comparativas
             </NavLink>
@@ -33,6 +37,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/sessions/:sessionId" element={<SessionDetail />} />
+          <Route path="/captura" element={<Captura />} />
           <Route path="/compare" element={<Compare />} />
         </Routes>
       </main>

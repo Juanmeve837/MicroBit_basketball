@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import UploadForm from "../components/UploadForm.jsx";
 import SessionHistory from "../components/SessionHistory.jsx";
 import { deleteSession, getSessions } from "../services/api.js";
@@ -55,7 +56,21 @@ export default function Home() {
 
   return (
     <div className="space-y-6">
-      <UploadForm />
+      <div className="grid gap-6 md:grid-cols-3">
+        <div className="md:col-span-2">
+          <UploadForm />
+        </div>
+        <Link
+          to="/captura"
+          className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 flex flex-col justify-center hover:border-court-orange transition-colors"
+        >
+          <h2 className="text-lg font-semibold mb-2">Capturar en vivo (Bluetooth)</h2>
+          <p className="text-sm text-slate-500">
+            Conecta la micro:bit desde el navegador y guarda la sesión sin pasar por nRF Connect.
+          </p>
+          <span className="mt-4 text-sm font-medium text-court-orange">Ir a captura →</span>
+        </Link>
+      </div>
 
       {loading && <p className="text-sm text-slate-400">Cargando sesiones…</p>}
       {error && (
