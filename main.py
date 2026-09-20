@@ -7,11 +7,13 @@ Correr con:
     uvicorn main:app --reload --port 8000
 """
 
+import io
 import logging
 import os
 from typing import List, Optional
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+import pandas as pd
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.requests import Request
 from fastapi.responses import JSONResponse
@@ -99,6 +101,44 @@ async def upload_sesion(
         "Sesion %s guardada: %s tiros, %s%% efectividad",
         resolved_session_id, summary["num_tiros"], summary["efectividad"],
     )
+    return summary
+
+
+@app.post(
+    "/api/sesion",
+    response_model=SesionOutput,
+    responses={400: {"model": ErrorResponse}},
+)
+async def sesion_csv(
+    file: UploadFile = File(..., description="CSV ya armado por el frontend (captura Web Bluetooth)"),
+    session_id: Optional[str] = Form(None),
+) -> dict:
+    """Recibe la sesion ya parseada (timestamp,session,tiro,x,y,z,potencia,cesta).
+
+    Ruta alterna a /api/upload: mismo esquema y misma persistencia, pero sin
+    pasar por el log crudo de nRF Connect.
+    """
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail={"detail": "Archivo invalido", "errors": ["El archivo esta vacio"]})
+    try:
+        df = pd.read_csv(io.BytesIO(content))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail={"detail": "CSV invalido", "errors": [str(exc)]})
+
+    ok, errors = validate_dataframe(df)
+    if not ok:
+        raise HTTPException(status_code=400, detail={"detail": "CSV invalido", "errors": errors})
+
+    resolved_session_id = session_id or str(df["session"].iloc[0])
+    df["session"] = resolved_session_id
+    summary = processors.compute_session_summary(df, resolved_session_id)
+    try:
+        database.save_session(df, summary)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail={"detail": str(exc), "errors": [str(exc)]})
+
+    logger.info("Sesion %s guardada via CSV: %s tiros", resolved_session_id, summary["num_tiros"])
     return summary
 
 
