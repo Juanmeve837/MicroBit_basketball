@@ -31,6 +31,23 @@ export async function uploadCsv(file, onProgress) {
   return data;
 }
 
+// Sesion ya armada por la captura Web Bluetooth (CSV con el esquema
+// timestamp,session,tiro,x,y,z,potencia,cesta). Devuelve el mismo resumen que
+// uploadCsv, asi que la sesion queda igual en el historial y es borrable.
+export async function postSesionCsv(csvString, sessionId) {
+  const formData = new FormData();
+  formData.append("session_id", sessionId);
+  formData.append(
+    "file",
+    new Blob([csvString], { type: "text/csv" }),
+    `sesion_${sessionId}.csv`
+  );
+  const { data } = await client.post("/sesion", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
 export async function getSessions({ dateFrom, dateTo, sortBy, order } = {}) {
   const { data } = await client.get("/sessions", {
     params: { date_from: dateFrom, date_to: dateTo, sort_by: sortBy, order },

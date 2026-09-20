@@ -372,7 +372,7 @@ Notas de la config para que funcione bajo un subpath de GitHub Pages
 - [x] API FastAPI para consumo en tiempo real — ver sección Backend
 - [x] Dashboard web (React) — ver sección Frontend
 - [ ] Modelo de ML para predicción de acierto (rama `feature/ml-predictor`, dependencias `scikit-learn`/`joblib` ya incluidas)
-- [ ] Captura en vivo por Web Bluetooth desde el navegador (rama `feature/web-bluetooth`)
+- [x] Captura en vivo por Web Bluetooth (página `#/captura` del dashboard; guarda vía `POST /api/sesion`, convive con la carga de CSV raw)
 - [ ] Rate limiting en el backend (opcional, no bloqueante para el MVP)
 - [x] Migrar la persistencia del backend de CSV+JSON a SQLite/Turso (ver sección Backend → Deploy)
 - [ ] Migrar `scripts/construir_bd_tiros.py` y el notebook de análisis a la misma base de datos (hoy siguen usando CSVs locales, fuera del alcance de la API desplegada)
