@@ -1,6 +1,6 @@
 """Parseo del log BLE crudo y calculo de metricas de sesion/tiro.
 
-Puerto de la logica de scripts/utils/parsers.py a un pipeline in-memory
+Puerto de la logica de utils/parsers.py a un pipeline in-memory
 (recibe texto, no rutas de archivo) para poder usarla desde la API.
 """
 

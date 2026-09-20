@@ -18,13 +18,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config.config import Config
-from scripts.utils.parsers import (
+from utils.parsers import (
     parse_ble_log,
     rebuild_ble_lines,
     parse_events,
     build_dataframe,
 )
-from scripts.utils.validators import validate_dataframe
+from utils.validators import validate_dataframe
 
 
 def resolve_input_path(archivo_log: str, data_raw: Path) -> Path:
