@@ -152,7 +152,7 @@ export function useBluetooth() {
     attemptReconnect();
   }, [attemptReconnect]);
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (options = {}) => {
     setError(null);
     setStatus(CONNECTION_STATUS.CONNECTING);
     intentionalDisconnectRef.current = false;
@@ -162,6 +162,7 @@ export function useBluetooth() {
       const { device } = await connectToMicrobit({
         onData: handleData,
         onDisconnect: handleDisconnect,
+        ...(options.acceptAll ? { acceptAll: true } : {}),
       });
       deviceRef.current = device;
       reconnectAttemptsRef.current = 0;

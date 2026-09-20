@@ -7,6 +7,10 @@ export const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 export const UART_TX_CHARACTERISTIC_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // escribir hacia micro:bit (write)
 export const UART_RX_CHARACTERISTIC_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // datos desde micro:bit (indicate)
 
+export function isIOS() {
+  return typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 export function isWebBluetoothSupported() {
   return typeof navigator !== "undefined" && !!navigator.bluetooth;
 }
@@ -47,15 +51,21 @@ export async function attachRx(rxCharacteristic, onData) {
  * @param {() => void} callbacks.onDisconnect - se dispara cuando el dispositivo se desconecta
  * @returns {Promise<{device: BluetoothDevice, server: BluetoothRemoteGATTServer, rxCharacteristic: BluetoothRemoteGATTCharacteristic}>}
  */
-export async function connectToMicrobit({ onData, onDisconnect }) {
+export async function connectToMicrobit({ onData, onDisconnect, acceptAll = isIOS() }) {
   if (!isWebBluetoothSupported()) {
     throw new Error("Este navegador no soporta Web Bluetooth. Usa Bluefy (iOS) o Chrome/Edge.");
   }
 
-  const device = await navigator.bluetooth.requestDevice({
-    filters: [{ namePrefix: "BBC micro:bit" }, { services: [UART_SERVICE_UUID] }],
-    optionalServices: [UART_SERVICE_UUID],
-  });
+  // Bluefy (iOS) no lista la micro:bit con filtros: el servicio UART no viene en
+  // el anuncio y el nombre no siempre coincide. Sin filtro si aparece.
+  const device = await navigator.bluetooth.requestDevice(
+    acceptAll
+      ? { acceptAllDevices: true, optionalServices: [UART_SERVICE_UUID] }
+      : {
+          filters: [{ namePrefix: "BBC micro:bit" }, { services: [UART_SERVICE_UUID] }],
+          optionalServices: [UART_SERVICE_UUID],
+        }
+  );
 
   device.addEventListener("gattserverdisconnected", () => {
     onDisconnect?.();
