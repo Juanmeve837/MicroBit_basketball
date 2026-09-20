@@ -99,9 +99,16 @@ Ver [Instalación](#instalación) arriba (`python -m venv .venv` + `pip install 
 
 ### 2. Capturar una sesión con la micro:bit
 
-Flashear `scripts/utils/microbit_lanzamiento.js` a la micro:bit (MakeCode).
-Botón **A** inicia/detiene la captura, botón **B** marca canasta. Exportar
-el log desde nRF Connect (Android/iOS) como CSV y guardarlo en `data/raw/`.
+Flashear `scripts/utils/microbit_lanzamiento.js` a la micro:bit (MakeCode,
+con *Project Settings → No pairing required*). Un tiro va de **A a A** (la
+primera pulsación inicia la captura, la segunda la detiene y cierra el tiro);
+**B** marca canasta del último tiro. Hay dos caminos, ambos válidos:
+
+1. **Manual (nRF Connect):** exportar el log desde nRF Connect (Android/iOS)
+   como CSV y guardarlo en `data/raw/`; o subirlo desde el dashboard
+   (`Inicio → Subir sesión`, endpoint `/api/upload`).
+2. **En vivo (Web Bluetooth):** desde la página `#/captura` del dashboard, ver
+   [Captura en vivo](#captura-en-vivo-web-bluetooth).
 
 ### 3. Procesar la sesión cruda
 
@@ -210,8 +217,10 @@ de análisis.
 |--------|----------------------------|-----------------------------------------------------------|
 | GET    | `/api/health`              | Healthcheck                                                |
 | POST   | `/api/upload`               | Sube un log BLE crudo (`multipart/form-data`, campo `file`); opcional `session_id` como query param. Devuelve `SesionOutput` con metricas por tiro. |
+| POST   | `/api/sesion`               | Sesión ya armada por la captura en vivo (`multipart/form-data`: `file` = CSV `timestamp,session,tiro,x,y,z,potencia,cesta`, `session_id` opcional). Misma respuesta (`SesionOutput`) y misma persistencia que `/api/upload`. La fecha sale del prefijo `YYYYMMDD` del `session_id`. |
 | GET    | `/api/sessions`             | Lista sesiones (resumen). Query opcionales: `date_from`, `date_to` (ISO `YYYY-MM-DD`), `sort_by`, `order` (`asc`/`desc`). |
 | GET    | `/api/sessions/{session_id}` | Detalle completo de una sesion (metricas por tiro, ejes, consistencia) |
+| DELETE | `/api/sessions/{session_id}` | Borra una sesión y sus tiros |
 | GET    | `/api/compare`              | Datos agregados de todas las sesiones para graficos comparativos (evolucion de efectividad, boxplot de potencia, distribucion de ejes) |
 
 ```bash
@@ -335,9 +344,49 @@ también proxea `/api` hacia `http://localhost:8000` en desarrollo.
 ```
 src/
   components/   UploadForm, Dashboard, KPICard, Charts, SessionHistory
-  pages/        Home, SessionDetail, Compare
-  services/     api.js (cliente Axios), sessionCache.js (cache en memoria, TTL 5 min)
+  hooks/        useBluetooth.js (estado de conexión, tiros/canastas, reconexión)
+  pages/        Home, SessionDetail, Compare, Captura (Web Bluetooth)
+  services/     api.js (cliente Axios), sessionCache.js (cache en memoria, TTL 5 min),
+                bluetooth.js, ble-parser.js, csv-generator.js (captura en vivo)
 ```
+
+### Captura en vivo (Web Bluetooth)
+
+Página `#/captura` (enlace "Captura en vivo" y tarjeta en Inicio). Conecta a la
+micro:bit desde el navegador, cuenta muestras/tiros/canastas, grafica la
+potencia, arma el CSV en el cliente y lo guarda con `POST /api/sesion`. La
+sesión queda en el historial y se puede borrar igual que las cargadas por CSV.
+La carga de CSV raw (`/api/upload`) sigue disponible en Inicio.
+
+**Navegadores:** Chrome/Edge (escritorio y Android). En iPhone Safari no
+soporta Web Bluetooth: usar la app **Bluefy** y abrir la URL del sitio; ahí
+el selector se pide sin filtro (`acceptAllDevices`) porque con filtros Bluefy
+no lista la placa. Mantener Bluefy abierto y la pantalla encendida.
+
+**Protocolo UART** (una línea por evento, `\n` al final): `x,y,z` = muestra,
+`E` = fin de tiro (2ª A), `B` = canasta. El parser acepta también `END`/`BASKET`.
+Servicio `6e400001-…`; los datos llegan por `6e400002-…` (*indicate*) y la
+escritura hacia la placa es `6e400003-…`.
+
+**Cebar con B (limitación conocida del firmware):** si la primera pulsación
+tras conectar es **A**, la placa muestra el error **020** (sin memoria).
+Workaround: pulsar **B** una vez antes de la primera A, al conectar y tras cada
+reconexión. El frontend ignora esa B de cebado (una B solo cuenta si llegó al
+menos una muestra desde el inicio de la sesión o la reconexión) y muestra un
+aviso "B ignoradas". Cambios de firmware probados que empeoran el problema:
+handlers `onBluetoothConnected/Disconnected` y enviar `x,y,z` en una sola
+escritura UART.
+
+**Reconexión:** si se cae el BLE a mitad de sesión, el cliente reconecta solo
+(hasta 5 intentos), descarta la línea parcial pendiente y deja un único
+listener; hay que volver a cebar con B. Si la placa seguía capturando, el tiro
+en curso abarca el hueco de la caída.
+
+**Nueva sesión** reinicia el buffer y el `session_id` sin desconectar la placa.
+
+**Fechas:** el servidor corre en UTC; el `session_id` (`YYYYMMDD_xxxxxxxx`) se
+genera con la fecha *local* del cliente y `/api/sesion` toma la fecha de ahí.
+`/api/upload` (log crudo) todavía usa la fecha del servidor (UTC).
 
 ### Contrato de API
 
@@ -373,6 +422,10 @@ Notas de la config para que funcione bajo un subpath de GitHub Pages
 - [x] Dashboard web (React) — ver sección Frontend
 - [ ] Modelo de ML para predicción de acierto (rama `feature/ml-predictor`, dependencias `scikit-learn`/`joblib` ya incluidas)
 - [x] Captura en vivo por Web Bluetooth (página `#/captura` del dashboard; guarda vía `POST /api/sesion`, convive con la carga de CSV raw)
+- [ ] Resolver el error 020 al primer A tras conectar (hoy: cebar con B); requiere entender el consumo de RAM de la micro:bit con BLE UART
+- [ ] Marcar como "interrumpida" una sesión en la que se cayó el BLE a mitad de un tiro
+- [ ] `/api/upload` espera el formato de log del firmware anterior (`tiro,x,y,z` con `E`/`B`); el firmware actual manda `x,y,z`. Unificar o migrar el parser de logs crudos
+- [ ] `/api/upload` usa la fecha del servidor (UTC), igual desfase que ya se corrigió en `/api/sesion`
 - [ ] Rate limiting en el backend (opcional, no bloqueante para el MVP)
 - [x] Migrar la persistencia del backend de CSV+JSON a SQLite/Turso (ver sección Backend → Deploy)
 - [ ] Migrar `scripts/construir_bd_tiros.py` y el notebook de análisis a la misma base de datos (hoy siguen usando CSVs locales, fuera del alcance de la API desplegada)
