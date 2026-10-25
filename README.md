@@ -44,8 +44,8 @@ scripts/
   archived/       Planes y documentos superados
 utils/            Funciones reutilizables de los scripts (parsers, validators, paths)
                   y firmware de referencia (microbit_lanzamiento.js)
-frontend/         Frontend standalone de captura Web Bluetooth (PoC original,
-                  superado por la página #/captura de src/; se conserva como referencia)
+docs/             Documentación adicional (poc-web-bluetooth.md: PoC original de
+                  captura Web Bluetooth, eliminada; vive en el historial de git)
 results/
   figures/        Gráficos generados por los notebooks
   tables/         Tablas resumen (CSV)
