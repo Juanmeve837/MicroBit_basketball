@@ -7,9 +7,9 @@
 # Requiere Project Settings -> "No pairing required".
 #
 # Esta version es la que funciona en la placa. Quirk conocido: la primera
-# pulsacion tras conectar debe ser B ("cebado"); si es A sale el error 020.
+# pulsacion tras conectar debe ser B (activa la sesion); si es A sale el error 020.
 # Probado y peor: handlers onBluetoothConnected/Disconnected, y enviar la linea
-# x,y,z en una sola escritura. El frontend ignora la B de cebado.
+# x,y,z en una sola escritura. El frontend toma esa primera B como activacion de sesion, no como canasta.
 
 bluetooth.startUartService()
 
