@@ -370,19 +370,27 @@ no lista la placa. Mantener Bluefy abierto y la pantalla encendida.
 Servicio `6e400001-…`; los datos llegan por `6e400002-…` (*indicate*) y la
 escritura hacia la placa es `6e400003-…`.
 
-**Cebar con B (limitación conocida del firmware):** si la primera pulsación
-tras conectar es **A**, la placa muestra el error **020** (sin memoria).
-Workaround: pulsar **B** una vez antes de la primera A, al conectar y tras cada
-reconexión. El frontend ignora esa B de cebado (una B solo cuenta si llegó al
-menos una muestra desde el inicio de la sesión o la reconexión) y muestra un
-aviso "B ignoradas". Cambios de firmware probados que empeoran el problema:
-handlers `onBluetoothConnected/Disconnected` y enviar `x,y,z` en una sola
-escritura UART.
+**Activar la sesión con B:** la micro:bit exige que la primera pulsación tras
+conectar sea **B**; si es **A** muestra el error **020** (sin memoria). Por eso
+el flujo es: conectar → pulsar **B** (activa la sesión) → capturar con A. Ese
+primer B **no es una canasta**: el frontend lo toma como activación y muestra un
+botón verde "Sesión activa" (antes de eso, "Pulsa B en la micro:bit para activar
+la sesión"). Con la sesión activa, cada B marca canasta del último tiro; un B
+que llega antes de cualquier tiro se cuenta como "B sin tiro previo". Cambios de
+firmware probados que empeoran el problema: handlers
+`onBluetoothConnected/Disconnected` y enviar `x,y,z` en una sola escritura UART.
 
 **Reconexión:** si se cae el BLE a mitad de sesión, el cliente reconecta solo
 (hasta 5 intentos), descarta la línea parcial pendiente y deja un único
-listener; hay que volver a cebar con B. Si la placa seguía capturando, el tiro
-en curso abarca el hueco de la caída.
+listener; hay que volver a activar la sesión con B. Si la placa seguía
+capturando, el tiro en curso abarca el hueco de la caída.
+
+**Sesiones largas:** las muestras se acumulan en un `ref` (no en estado de
+React) y la pantalla se refresca como mucho cada 250 ms; el gráfico usa solo las
+últimas 150. El CSV se arma por bloques de 5000 filas y se entrega como `Blob`
+(la URL de descarga se revoca a los 60 s) y `POST /api/sesion` admite hasta
+120 s. Medido en local con 100/200/300 tiros (40 muestras por tiro, hasta 12 000
+filas y ~670 KB): el CSV sale idéntico y el guardado tarda ~1 s.
 
 **Nueva sesión** reinicia el buffer y el `session_id` sin desconectar la placa.
 
@@ -422,9 +430,9 @@ Notas de la config para que funcione bajo un subpath de GitHub Pages
 
 - [x] API FastAPI para consumo en tiempo real — ver sección Backend
 - [x] Dashboard web (React) — ver sección Frontend
-- [ ] Modelo de ML para predicción de acierto (rama `feature/ml-predictor`, dependencias `scikit-learn`/`joblib` ya incluidas)
+- [ ] Modelo de ML para predicción de acierto (rama `feature/ml-predictor`, hoy vacía: se rehará desde cero)
 - [x] Captura en vivo por Web Bluetooth (página `#/captura` del dashboard; guarda vía `POST /api/sesion`, convive con la carga de CSV raw)
-- [ ] Resolver el error 020 al primer A tras conectar (hoy: cebar con B); requiere entender el consumo de RAM de la micro:bit con BLE UART
+- [ ] Resolver el error 020 al primer A tras conectar (hoy: activar la sesión con B); requiere entender el consumo de RAM de la micro:bit con BLE UART
 - [ ] Marcar como "interrumpida" una sesión en la que se cayó el BLE a mitad de un tiro
 - [ ] `/api/upload` espera el formato de log del firmware anterior (`tiro,x,y,z` con `E`/`B`); el firmware actual manda `x,y,z`. Unificar o migrar el parser de logs crudos
 - [ ] `/api/upload` usa la fecha del servidor (UTC), igual desfase que ya se corrigió en `/api/sesion`

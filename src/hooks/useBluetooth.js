@@ -7,7 +7,7 @@ import {
   UART_RX_CHARACTERISTIC_UUID,
 } from "../services/bluetooth";
 import { LineBuffer, parseLine, EVENT_TYPES } from "../services/ble-parser";
-import { buildSessionRows, rowsToCsv } from "../services/csv-generator";
+import { buildCsvBlob } from "../services/csv-generator";
 
 export const CONNECTION_STATUS = {
   DISCONNECTED: "disconnected",
@@ -19,6 +19,10 @@ export const CONNECTION_STATUS = {
 
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY_MS = 2000;
+// Las muestras viven en un ref (no en estado) para que una sesion larga no copie
+// el array entero en cada linea; la UI se refresca como mucho cada FLUSH_MS.
+const FLUSH_MS = 250;
+const RECENT_SAMPLES = 150;
 
 function nowTimestamp() {
   const d = new Date();
@@ -36,33 +40,54 @@ function generateSessionId() {
 
 export function useBluetooth() {
   const [status, setStatus] = useState(CONNECTION_STATUS.DISCONNECTED);
-  const [samples, setSamples] = useState([]);
+  const [sampleCount, setSampleCount] = useState(0);
+  const [recentSamples, setRecentSamples] = useState([]);
   const [shotCount, setShotCount] = useState(0);
   const [basketCount, setBasketCount] = useState(0);
   const [error, setError] = useState(null);
   const [invalidLineCount, setInvalidLineCount] = useState(0);
   const [ignoredBasketCount, setIgnoredBasketCount] = useState(0);
+  const [sessionActive, setSessionActive] = useState(false);
 
+  const samplesRef = useRef([]);
+  const flushTimerRef = useRef(null);
   const deviceRef = useRef(null);
   const lineBufferRef = useRef(new LineBuffer());
   const cestaPorTiroRef = useRef(new Map());
   const currentTiroRef = useRef(1);
   const ultimoTiroRef = useRef(null);
-  // Un B solo vale si llego una muestra desde el (re)inicio de sesion o de la
-  // conexion: un B de "cebado" al conectar no debe marcar canasta a un tiro previo.
-  const basketArmedRef = useRef(false);
+  // El primer B tras conectar (o reconectar) activa la sesion: la micro:bit lo
+  // exige antes de la primera A y no es una canasta. Los B siguientes si lo son.
+  const sessionActiveRef = useRef(false);
   const sessionIdRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
   const intentionalDisconnectRef = useRef(false);
 
+  const flushSamples = useCallback(() => {
+    flushTimerRef.current = null;
+    setSampleCount(samplesRef.current.length);
+    setRecentSamples(samplesRef.current.slice(-RECENT_SAMPLES));
+  }, []);
+
+  const scheduleFlush = useCallback(() => {
+    if (flushTimerRef.current === null) {
+      flushTimerRef.current = setTimeout(flushSamples, FLUSH_MS);
+    }
+  }, [flushSamples]);
+
   const resetSessionState = useCallback(() => {
+    clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = null;
+    samplesRef.current = [];
     lineBufferRef.current = new LineBuffer();
     cestaPorTiroRef.current = new Map();
     currentTiroRef.current = 1;
     ultimoTiroRef.current = null;
-    basketArmedRef.current = false;
+    sessionActiveRef.current = false;
     sessionIdRef.current = generateSessionId();
-    setSamples([]);
+    setSessionActive(false);
+    setSampleCount(0);
+    setRecentSamples([]);
     setShotCount(0);
     setBasketCount(0);
     setInvalidLineCount(0);
@@ -81,9 +106,8 @@ export function useBluetooth() {
     if (evento.type === EVENT_TYPES.DATA) {
       const tiro = currentTiroRef.current;
       ultimoTiroRef.current = tiro;
-      basketArmedRef.current = true;
-      const sample = { timestamp: nowTimestamp(), tiro, x: evento.x, y: evento.y, z: evento.z };
-      setSamples((prev) => [...prev, sample]);
+      samplesRef.current.push({ timestamp: nowTimestamp(), tiro, x: evento.x, y: evento.y, z: evento.z });
+      scheduleFlush();
     } else if (evento.type === EVENT_TYPES.END) {
       const tiro = ultimoTiroRef.current;
       if (tiro !== null) {
@@ -94,8 +118,13 @@ export function useBluetooth() {
         setShotCount(cestaPorTiroRef.current.size);
       }
     } else if (evento.type === EVENT_TYPES.BASKET) {
+      if (!sessionActiveRef.current) {
+        sessionActiveRef.current = true;
+        setSessionActive(true);
+        return;
+      }
       const tiro = ultimoTiroRef.current;
-      if (tiro === null || !basketArmedRef.current) {
+      if (tiro === null) {
         setIgnoredBasketCount((n) => n + 1);
       } else {
         const eraCesta = cestaPorTiroRef.current.get(tiro) === 1;
@@ -104,7 +133,7 @@ export function useBluetooth() {
         if (!eraCesta) setBasketCount((n) => n + 1);
       }
     }
-  }, []);
+  }, [scheduleFlush]);
 
   const handleData = useCallback(
     (chunk) => {
@@ -137,7 +166,8 @@ export function useBluetooth() {
       lineBufferRef.current = new LineBuffer();
       await attachRx(rx, handleData);
       reconnectAttemptsRef.current = 0;
-      basketArmedRef.current = false;
+      sessionActiveRef.current = false;
+      setSessionActive(false);
       setStatus(CONNECTION_STATUS.CONNECTED);
     } catch (err) {
       attemptReconnect();
@@ -179,14 +209,17 @@ export function useBluetooth() {
     setStatus(CONNECTION_STATUS.DISCONNECTED);
   }, []);
 
+  // Devuelve un Blob armado por bloques: en sesiones largas evita un string gigante.
   const getCsv = useCallback(() => {
-    const rows = buildSessionRows(samples, cestaPorTiroRef.current, sessionIdRef.current);
-    return { csv: rowsToCsv(rows), sessionId: sessionIdRef.current, rows };
-  }, [samples]);
+    const blob = buildCsvBlob(samplesRef.current, cestaPorTiroRef.current, sessionIdRef.current);
+    return { blob, sessionId: sessionIdRef.current };
+  }, []);
 
   return {
     status,
-    samples,
+    sampleCount,
+    recentSamples,
+    sessionActive,
     shotCount,
     basketCount,
     invalidLineCount,

@@ -36,8 +36,22 @@ export function rowsToCsv(rows) {
   return [header, ...lineas].join("\n") + "\n";
 }
 
-export function downloadCsv(csvString, filename) {
-  const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+const CHUNK_ROWS = 5000;
+
+// Arma el CSV por bloques y lo devuelve como Blob: en sesiones largas evita
+// materializar todas las filas y un unico string enorme.
+export function buildCsvBlob(samples, cestaPorTiro, sessionId) {
+  const partes = [COLUMNAS.join(",") + "\n"];
+  for (let i = 0; i < samples.length; i += CHUNK_ROWS) {
+    const filas = buildSessionRows(samples.slice(i, i + CHUNK_ROWS), cestaPorTiro, sessionId);
+    partes.push(filas.map((row) => COLUMNAS.map((col) => escapeCsvField(row[col])).join(",")).join("\n") + "\n");
+  }
+  return new Blob(partes, { type: "text/csv;charset=utf-8;" });
+}
+
+export function downloadCsv(csvOrBlob, filename) {
+  const blob =
+    csvOrBlob instanceof Blob ? csvOrBlob : new Blob([csvOrBlob], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -45,5 +59,6 @@ export function downloadCsv(csvString, filename) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Revocar al instante puede cancelar la descarga de archivos grandes.
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }

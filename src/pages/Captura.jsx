@@ -70,20 +70,20 @@ export default function Captura() {
     CONNECTION_STATUS.CAPTURING,
     CONNECTION_STATUS.RECONNECTING,
   ].includes(bt.status);
-  const hasData = bt.samples.length > 0;
+  const hasData = bt.sampleCount > 0;
   const porcentaje = bt.shotCount > 0 ? Math.round((bt.basketCount / bt.shotCount) * 100) : 0;
 
   const handleDownload = () => {
-    const { csv, sessionId } = bt.getCsv();
-    downloadCsv(csv, `sesion_${sessionId}.csv`);
+    const { blob, sessionId } = bt.getCsv();
+    downloadCsv(blob, `sesion_${sessionId}.csv`);
   };
 
   const handleSave = async () => {
     setSaving(true);
     setSaveError("");
     try {
-      const { csv, sessionId } = bt.getCsv();
-      const result = await postSesionCsv(csv, sessionId);
+      const { blob, sessionId } = bt.getCsv();
+      const result = await postSesionCsv(blob, sessionId);
       invalidate();
       navigate(`/sessions/${result?.session_id || sessionId}`);
     } catch (err) {
@@ -120,11 +120,13 @@ export default function Captura() {
             Enciende la micro:bit con el firmware BLE UART y pulsa <strong>Conectar</strong>.
           </li>
           <li>
-            <strong>Ceba la placa con B:</strong> tras conectar (y tras cada reconexión) pulsa B una vez antes de la
-            primera A; si la primera pulsación es A, sale el error 020. Esa B no cuenta como canasta.
+            <strong>Activa la sesión con B:</strong> tras conectar (y tras cada reconexión) pulsa B una vez antes de
+            la primera A. Ese primer B <strong>no es una canasta</strong>, solo activa la sesión (el botón se pone
+            verde). Si la primera pulsación es A, la micro:bit muestra el error 020.
           </li>
           <li>
-            <strong>A</strong> inicia y detiene cada tiro (un tiro va de A a A). <strong>B</strong> marca canasta.
+            <strong>A</strong> inicia y detiene cada tiro (un tiro va de A a A). Con la sesión activa, <strong>B</strong> marca
+            canasta.
           </li>
           <li>
             Al terminar pulsa <strong>Guardar sesión</strong>.
@@ -166,15 +168,26 @@ export default function Captura() {
 
       {connected && (
         <div className={card}>
-          <p className="text-xs text-slate-400 mb-3">Sesión: {bt.sessionId}</p>
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <p className="text-xs text-slate-400">Sesión: {bt.sessionId}</p>
+            {bt.sessionActive ? (
+              <span role="status" className="px-3 py-1 rounded-md text-sm font-semibold bg-green-600 text-white">
+                Sesión activa
+              </span>
+            ) : (
+              <span role="status" className="px-3 py-1 rounded-md text-sm font-medium bg-slate-100 text-slate-500">
+                Pulsa B en la micro:bit para activar la sesión
+              </span>
+            )}
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-            <Stat value={bt.samples.length} label="muestras" />
+            <Stat value={bt.sampleCount} label="muestras" />
             <Stat value={bt.shotCount} label="tiros" />
             <Stat value={`${bt.basketCount}/${bt.shotCount}`} label={`canastas (${porcentaje}%)`} />
             {bt.invalidLineCount > 0 && <Stat value={bt.invalidLineCount} label="líneas corruptas" warn />}
-            {bt.ignoredBasketCount > 0 && <Stat value={bt.ignoredBasketCount} label="B ignoradas (cebado)" warn />}
+            {bt.ignoredBasketCount > 0 && <Stat value={bt.ignoredBasketCount} label="B sin tiro previo" warn />}
           </div>
-          <PowerChart samples={bt.samples} />
+          <PowerChart samples={bt.recentSamples} />
           <div className="flex gap-2 flex-wrap mt-4">
             <button onClick={handleSave} disabled={!hasData || saving} className={btnPrimary}>
               {saving ? "Guardando…" : "Guardar sesión"}
@@ -188,7 +201,7 @@ export default function Captura() {
           </div>
           {saveError && (
             <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3" role="alert">
-              No se pudo guardar en el backend: {saveError}. Descarga el CSV como respaldo.
+              No se pudo guardar en el backend: {saveError}. Descarga el CSV como respaldo (se genera en tu navegador, no depende del servidor).
             </div>
           )}
         </div>

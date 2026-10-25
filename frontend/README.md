@@ -63,21 +63,25 @@ El firmware no envía número de tiro; `useBluetooth.js` lo cuenta localmente
 `utils/parsers.py::build_dataframe` para poder reasignar `BASKET` incluso si
 llega antes o después del `END`.
 
-## Uso con la micro:bit: cebar con B
+## Uso con la micro:bit: activar la sesión con B
+
+> Nota: la interfaz vigente (la que se despliega) está en `src/` de la raíz del
+> repo; esta carpeta `frontend/` es la copia anterior y no se mantiene.
 
 El firmware actual tiene un quirk sin resolver: si la **primera** pulsación
 tras conectar es **A**, la placa muestra el error **020** (sin memoria) y no
-deja capturar. Workaround: pulsar **B** una vez antes de la primera A, tanto
-al conectar como tras cada reconexión.
+deja capturar. Por eso la primera pulsación debe ser **B**, tanto al conectar
+como tras cada reconexión.
 
-- El frontend ignora esa B de cebado: una B solo cuenta si llegó al menos una
-  muestra desde el inicio de la sesión o desde la última reconexión. Las B
-  ignoradas se muestran como aviso en el indicador de datos.
-- Un tiro va de A a A; B marca canasta del último tiro con datos.
+- Ese primer B **activa la sesión y no es una canasta**. La interfaz lo muestra
+  como un botón verde "Sesión activa"; los B siguientes marcan canasta del
+  último tiro con datos. Un B antes de cualquier tiro se cuenta como "B sin
+  tiro previo".
+- Un tiro va de A a A.
 - **Nueva sesión** reinicia el buffer y el `session_id` sin desconectar la placa.
 - Probado y peor (no repetir): handlers `onBluetoothConnected/Disconnected`
   y enviar `x,y,z` en una sola escritura UART; ambos producen 020 incluso
-  cebando. Referencia: `utils/microbit_lanzamiento.js`.
+  activando con B. Referencia: `utils/microbit_lanzamiento.js`.
 - Reconexión: `attachRx` deja un solo listener por característica y se
   descarta la línea parcial pendiente; evita el flujo de "líneas corruptas".
 
