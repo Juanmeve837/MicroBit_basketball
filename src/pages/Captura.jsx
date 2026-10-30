@@ -182,8 +182,22 @@ export default function Captura() {
             </button>
           ) : (
             <>
-              <button onClick={() => bt.connect()} disabled={bt.status === CONNECTION_STATUS.CONNECTING} className={btnPrimary}>
-                {bt.recentDevices.length > 0 ? "Buscar otro dispositivo" : "Conectar a micro:bit"}
+              {bt.deviceName && (
+                <button
+                  onClick={bt.reconnectNow}
+                  disabled={bt.status === CONNECTION_STATUS.CONNECTING}
+                  className={btnPrimary}
+                  title="Reconecta a la misma placa sin abrir el selector"
+                >
+                  Reconectar a {bt.deviceName}
+                </button>
+              )}
+              <button
+                onClick={() => bt.connect()}
+                disabled={bt.status === CONNECTION_STATUS.CONNECTING}
+                className={bt.deviceName ? btn : btnPrimary}
+              >
+                {bt.deviceName || bt.recentDevices.length > 0 ? "Buscar otro dispositivo" : "Conectar a micro:bit"}
               </button>
               <button
                 onClick={() => bt.connect({ acceptAll: true })}
@@ -211,7 +225,7 @@ export default function Captura() {
                   </button>
                   <span className="text-xs text-slate-400">
                     último uso {new Date(d.lastUsed).toLocaleDateString()}
-                    {d.direct ? "" : " · se elegirá en el selector"}
+                    {d.direct ? "" : ` · en el selector elige «${d.name}»`}
                   </span>
                   <button
                     onClick={() => bt.forgetDevice(d.id)}
@@ -234,7 +248,19 @@ export default function Captura() {
       {(connected || hasData) && (
         <div className={card}>
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-            <p className="text-xs text-slate-400">Sesión: {bt.sessionId}</p>
+            <div>
+              <p className="text-xs text-slate-400">Sesión: {bt.sessionId}</p>
+              {connected && bt.keepAwakeMode === "failed" ? (
+                <p className="text-xs text-amber-700">
+                  No se pudo mantener la pantalla encendida: no bloquees el teléfono o se perderá la captura.
+                </p>
+              ) : (
+                connected &&
+                bt.keepAwakeMode !== "off" && (
+                  <p className="text-xs text-slate-400">Pantalla: se mantiene encendida</p>
+                )
+              )}
+            </div>
             {!connected ? (
               <span role="status" className="px-3 py-1 rounded-md text-sm font-medium bg-amber-100 text-amber-800">
                 Sin conexión: la sesión sigue en pantalla
@@ -257,6 +283,20 @@ export default function Captura() {
             {bt.ignoredBasketCount > 0 && <Stat value={bt.ignoredBasketCount} label="B sin tiro previo" warn />}
             {bt.interruptedCount > 0 && <Stat value={bt.interruptedCount} label="tiros interrumpidos" warn />}
           </div>
+          {bt.backgroundGapSecs > 0 && (
+            <div
+              className="mb-4 flex items-start justify-between gap-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-3"
+              role="status"
+            >
+              <p>
+                La página estuvo en segundo plano {bt.backgroundGapSecs} s: puede faltar un tramo de muestras. Ese tiro
+                quedó marcado como interrumpido. Mantén la pantalla encendida y esta pestaña a la vista mientras capturas.
+              </p>
+              <button onClick={bt.dismissBackgroundGap} className="text-xs underline shrink-0">
+                Entendido
+              </button>
+            </div>
+          )}
           {connected && !bt.sessionActive && hasData && (
             <p className="mb-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-3" role="status">
               Tras reconectar, el primer B solo reactiva la sesión y <strong>no cuenta como canasta</strong>. Si el
