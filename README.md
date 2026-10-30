@@ -392,6 +392,23 @@ faltarle el tramo del hueco. Si se agotan los intentos, conectar de nuevo **no
 borra lo capturado** (solo "Nueva sesión" reinicia) y los botones de guardar y
 descargar siguen disponibles sin conexión.
 
+**Pantalla y segundo plano (Bluefy):** al conectar se pide mantener la pantalla
+encendida (Screen Wake Lock; si el navegador no lo tiene, un video oculto en
+bucle con `nosleep.js`) y la captura lo indica; si no se logra, avisa de no
+bloquear el teléfono. Bloquear la pantalla o cambiar de app suspende el
+JavaScript y se pierden muestras a veces sin evento de desconexión, así que
+además: un silencio de más de 1,5 s dentro de un tiro, o haber estado oculta
+la página 3 s o más con un tiro abierto, marca ese tiro como **interrumpido**
+y muestra un aviso. Al volver a la página, si la conexión se perdió, reconecta
+de inmediato.
+
+**Reconexión sin selector:** los intentos esperan 2, 3, 5, 8 y 10 s y cada uno
+tiene un tiempo límite de 10 s (un `connect()` colgado ya no bloquea). Tras
+agotarlos, o después de desconectar, el botón **Reconectar a <placa>** vuelve a
+la misma placa sin abrir el selector mientras no se recargue la página. Tras
+recargar, en Bluefy (sin `getDevices()`) hace falta el selector: "Dispositivos
+recientes" indica qué nombre elegir.
+
 **Sesión en `localStorage`:** mientras captura, la sesión se copia al
 almacenamiento local (como mucho cada 2 s). Si se recarga o se cierra la
 pestaña, `#/captura` ofrece **Recuperar** o **Descartar**; la copia se borra al

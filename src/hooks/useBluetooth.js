@@ -28,8 +28,15 @@ export const CONNECTION_STATUS = {
   RECONNECTING: "reconnecting",
 };
 
-export const MAX_RECONNECT_ATTEMPTS = 5;
-const RECONNECT_DELAY_MS = 2000;
+// La micro:bit tarda en volver a anunciarse: espera creciente entre intentos.
+const RECONNECT_DELAYS_MS = [2000, 3000, 5000, 8000, 10000];
+export const MAX_RECONNECT_ATTEMPTS = RECONNECT_DELAYS_MS.length;
+// gatt.connect() puede quedarse colgado sin fallar (sobre todo en iOS).
+const CONNECT_TIMEOUT_MS = 10000;
+// El firmware manda ~10 muestras/s: un silencio mayor dentro de un tiro es un hueco.
+const GAP_MS = 1500;
+// Tiempo oculta (pantalla bloqueada / otra app) a partir del cual se avisa.
+const HIDDEN_WARN_S = 3;
 // Las muestras viven en un ref (no en estado) para que una sesion larga no copie
 // el array entero en cada linea; la UI se refresca como mucho cada FLUSH_MS.
 const FLUSH_MS = 250;
@@ -49,6 +56,14 @@ function generateSessionId() {
   const fecha = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
   const uuid = crypto.randomUUID().slice(0, 8).toUpperCase();
   return `${fecha}_${uuid}`;
+}
+
+function withTimeout(promise, ms) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error("Tiempo de espera agotado al conectar")), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 function countBaskets(cestaPorTiro) {
@@ -76,6 +91,8 @@ export function useBluetooth() {
   // Sesion sin guardar encontrada en localStorage al abrir la pagina.
   const [pendingSnapshot, setPendingSnapshot] = useState(() => loadSnapshot());
   const [keepAwakeMode, setKeepAwakeMode] = useState(getKeepAwakeMode());
+  // Segundos que la pagina estuvo oculta con un tiro abierto (aviso de hueco).
+  const [backgroundGapSecs, setBackgroundGapSecs] = useState(0);
 
   const samplesRef = useRef([]);
   const flushTimerRef = useRef(null);
@@ -96,6 +113,10 @@ export function useBluetooth() {
   // Mientras connect() esta en curso, un gattserverdisconnected es parte del
   // propio intento (p. ej. fallo del dispositivo recordado) y no una caida.
   const connectingRef = useRef(false);
+  // true mientras corre el bucle de reconexion (evita bucles paralelos).
+  const reconnectingRef = useRef(false);
+  const ultimaMuestraRef = useRef(null);
+  const hiddenSinceRef = useRef(null);
 
   const writeSnapshotNow = useCallback(() => {
     clearTimeout(snapshotTimerRef.current);
@@ -124,6 +145,18 @@ export function useBluetooth() {
     setPendingSnapshot(null);
   }, []);
 
+  // Marca un tiro como cortado (caida, hueco de muestras o segundo plano):
+  // se guarda igual, pero queda senalado en el CSV y en el detalle.
+  const markInterrumpido = useCallback(
+    (tiro) => {
+      if (interrumpidosRef.current.has(tiro)) return;
+      interrumpidosRef.current.add(tiro);
+      setInterruptedCount(interrumpidosRef.current.size);
+      scheduleSnapshot();
+    },
+    [scheduleSnapshot]
+  );
+
   const flushSamples = useCallback(() => {
     flushTimerRef.current = null;
     setSampleCount(samplesRef.current.length);
@@ -147,7 +180,9 @@ export function useBluetooth() {
     ultimoTiroRef.current = null;
     sessionActiveRef.current = false;
     sessionIdRef.current = generateSessionId();
+    ultimaMuestraRef.current = null;
     dropSnapshot();
+    setBackgroundGapSecs(0);
     setSessionActive(false);
     setSampleCount(0);
     setRecentSamples([]);
@@ -169,6 +204,17 @@ export function useBluetooth() {
 
     if (evento.type === EVENT_TYPES.DATA) {
       const tiro = currentTiroRef.current;
+      const ahora = performance.now();
+      // Silencio largo dentro del mismo tiro: se perdieron muestras aunque no
+      // llegara ningun evento de desconexion.
+      if (
+        ultimoTiroRef.current === tiro &&
+        ultimaMuestraRef.current !== null &&
+        ahora - ultimaMuestraRef.current > GAP_MS
+      ) {
+        markInterrumpido(tiro);
+      }
+      ultimaMuestraRef.current = ahora;
       ultimoTiroRef.current = tiro;
       samplesRef.current.push({ timestamp: nowTimestamp(), tiro, x: evento.x, y: evento.y, z: evento.z });
       scheduleFlush();
@@ -200,7 +246,7 @@ export function useBluetooth() {
         scheduleSnapshot();
       }
     }
-  }, [scheduleFlush, scheduleSnapshot]);
+  }, [scheduleFlush, scheduleSnapshot, markInterrumpido]);
 
   const handleData = useCallback(
     (chunk) => {
@@ -210,8 +256,9 @@ export function useBluetooth() {
     [handleLine]
   );
 
-  const attemptReconnect = useCallback(async () => {
+  const attemptReconnect = useCallback(async (immediate = false) => {
     if (intentionalDisconnectRef.current || !deviceRef.current) {
+      reconnectingRef.current = false;
       return;
     }
     if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
@@ -220,30 +267,49 @@ export function useBluetooth() {
         `Se perdió la conexión con ${nombre} y no se pudo reconectar automáticamente. ` +
           "Lo capturado sigue en pantalla: reconecta para continuar o guarda la sesión."
       );
+      reconnectingRef.current = false;
       setReconnectAttempt(0);
       setStatus(CONNECTION_STATUS.DISCONNECTED);
+      disableKeepAwake();
       return;
     }
 
+    reconnectingRef.current = true;
     reconnectAttemptsRef.current += 1;
-    setReconnectAttempt(reconnectAttemptsRef.current);
+    const intento = reconnectAttemptsRef.current;
+    setReconnectAttempt(intento);
     setStatus(CONNECTION_STATUS.RECONNECTING);
 
-    await new Promise((resolve) => setTimeout(resolve, RECONNECT_DELAY_MS));
+    if (!immediate) {
+      await new Promise((resolve) => setTimeout(resolve, RECONNECT_DELAYS_MS[intento - 1]));
+      // El usuario pudo desconectar durante la espera.
+      if (intentionalDisconnectRef.current) {
+        reconnectingRef.current = false;
+        return;
+      }
+    }
 
+    const gatt = deviceRef.current.gatt;
     try {
-      const server = await deviceRef.current.gatt.connect();
+      const server = await withTimeout(gatt.connect(), CONNECT_TIMEOUT_MS);
       const service = await server.getPrimaryService(UART_SERVICE_UUID);
       const rx = await service.getCharacteristic(UART_RX_CHARACTERISTIC_UUID);
       // Descarta media linea pendiente de antes de la caida.
       lineBufferRef.current = new LineBuffer();
       await attachRx(rx, handleData);
       reconnectAttemptsRef.current = 0;
+      reconnectingRef.current = false;
       sessionActiveRef.current = false;
       setReconnectAttempt(0);
       setSessionActive(false);
       setStatus(CONNECTION_STATUS.CONNECTED);
     } catch (err) {
+      // Cancelar un connect colgado antes del siguiente intento.
+      try {
+        if (gatt.connected) gatt.disconnect();
+      } catch {
+        // ya estaba desconectado
+      }
       attemptReconnect();
     }
   }, [handleData]);
@@ -253,19 +319,65 @@ export function useBluetooth() {
       setStatus(CONNECTION_STATUS.DISCONNECTED);
       return;
     }
-    if (connectingRef.current) {
+    // Durante connect() o un bucle de reconexion en curso, un
+    // gattserverdisconnected es parte del propio intento, no una caida nueva.
+    if (connectingRef.current || reconnectingRef.current) {
       return;
     }
     // Caida a mitad de un tiro: el tiro abierto ya tiene muestras y le faltara
     // el tramo del hueco. Se marca (no se descarta) para poder revisarlo.
     const tiroAbierto = currentTiroRef.current;
-    if (ultimoTiroRef.current === tiroAbierto && !interrumpidosRef.current.has(tiroAbierto)) {
-      interrumpidosRef.current.add(tiroAbierto);
-      setInterruptedCount(interrumpidosRef.current.size);
+    if (ultimoTiroRef.current === tiroAbierto) {
+      markInterrumpido(tiroAbierto);
     }
     writeSnapshotNow();
     attemptReconnect();
-  }, [attemptReconnect, writeSnapshotNow]);
+  }, [attemptReconnect, writeSnapshotNow, markInterrumpido]);
+
+  // Reconecta a la placa ya elegida en esta carga de la pagina, sin abrir el
+  // selector del navegador (sirve tras agotar los intentos o un desconectar).
+  const reconnectNow = useCallback(() => {
+    if (!deviceRef.current || reconnectingRef.current || connectingRef.current) return;
+    intentionalDisconnectRef.current = false;
+    reconnectAttemptsRef.current = 0;
+    setError(null);
+    enableKeepAwake();
+    attemptReconnect(true);
+  }, [attemptReconnect]);
+
+  // Pantalla bloqueada / otra app: el JS se suspende y las notificaciones BLE se
+  // pierden, a veces sin evento de desconexion. Al volver: avisar del hueco y
+  // reconectar de inmediato si la conexion ya no esta.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenSinceRef.current = Date.now();
+        writeSnapshotNow();
+        return;
+      }
+      const since = hiddenSinceRef.current;
+      hiddenSinceRef.current = null;
+      const device = deviceRef.current;
+      if (since === null || !device || intentionalDisconnectRef.current) return;
+
+      const secs = Math.round((Date.now() - since) / 1000);
+      const capturando = samplesRef.current.length > 0 && ultimoTiroRef.current === currentTiroRef.current;
+      if (secs >= HIDDEN_WARN_S && capturando && device.gatt?.connected) {
+        markInterrumpido(currentTiroRef.current);
+        setBackgroundGapSecs(secs);
+      }
+      if (!device.gatt?.connected && !reconnectingRef.current && !connectingRef.current) {
+        if (capturando) {
+          markInterrumpido(currentTiroRef.current);
+          setBackgroundGapSecs(secs);
+        }
+        reconnectAttemptsRef.current = 0;
+        attemptReconnect(true);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [attemptReconnect, markInterrumpido, writeSnapshotNow]);
 
   const refreshRecentDevices = useCallback(async () => {
     const authorized = await getAuthorizedDevices();
@@ -399,10 +511,13 @@ export function useBluetooth() {
     deviceName,
     keepAwakeMode,
     reconnectAttempt,
+    backgroundGapSecs,
+    dismissBackgroundGap: () => setBackgroundGapSecs(0),
     recentDevices,
     pendingSnapshot,
     sessionId: sessionIdRef.current,
     connect,
+    reconnectNow,
     newSession: resetSessionState,
     disconnect,
     forgetDevice: forgetKnownDevice,
