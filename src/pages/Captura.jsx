@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CONNECTION_STATUS, useBluetooth } from "../hooks/useBluetooth.js";
+import { CONNECTION_STATUS, MAX_RECONNECT_ATTEMPTS, useBluetooth } from "../hooks/useBluetooth.js";
 import { isWebBluetoothSupported } from "../services/bluetooth.js";
 import { downloadCsv } from "../services/csv-generator.js";
 import { postSesionCsv } from "../services/api.js";
@@ -71,6 +71,22 @@ export default function Captura() {
     CONNECTION_STATUS.RECONNECTING,
   ].includes(bt.status);
   const hasData = bt.sampleCount > 0;
+  const reconnecting = bt.status === CONNECTION_STATUS.RECONNECTING;
+  const statusText = reconnecting
+    ? `Reconectando a ${bt.deviceName || "la micro:bit"} (intento ${bt.reconnectAttempt}/${MAX_RECONNECT_ATTEMPTS})…`
+    : STATUS_LABEL[bt.status];
+
+  // Avisar antes de cerrar la pestaña con una sesion sin guardar (al guardar se navega y se desmonta).
+  useEffect(() => {
+    if (!hasData) return undefined;
+    const onBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [hasData]);
+
   const porcentaje = bt.shotCount > 0 ? Math.round((bt.basketCount / bt.shotCount) * 100) : 0;
 
   const handleDownload = () => {
@@ -84,6 +100,7 @@ export default function Captura() {
     try {
       const { blob, sessionId } = bt.getCsv();
       const result = await postSesionCsv(blob, sessionId);
+      bt.markSaved();
       invalidate();
       navigate(`/sessions/${result?.session_id || sessionId}`);
     } catch (err) {
@@ -113,6 +130,25 @@ export default function Captura() {
 
   return (
     <div className="space-y-6">
+      {bt.pendingSnapshot && !hasData && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm" role="status">
+          <p className="text-amber-900">
+            Hay una sesión sin guardar de {new Date(bt.pendingSnapshot.savedAt).toLocaleString()} (
+            {bt.pendingSnapshot.samples.length} muestras). Se conservó al cerrar o recargar la página.
+          </p>
+          <div className="flex gap-2 mt-3">
+            <button onClick={bt.restoreSession} className={btnPrimary}>
+              Recuperar
+            </button>
+            <button
+              onClick={() => window.confirm("Se perderá esa sesión. ¿Descartarla?") && bt.discardSnapshot()}
+              className={btn}
+            >
+              Descartar
+            </button>
+          </div>
+        </div>
+      )}
       <div className={card}>
         <h2 className="text-lg font-semibold mb-3">Captura en vivo</h2>
         <ol className="list-decimal pl-5 text-sm text-slate-600 space-y-1 mb-4">
@@ -135,7 +171,7 @@ export default function Captura() {
         <div className="flex items-center gap-3 flex-wrap">
           <span className={`inline-flex items-center gap-2 text-sm font-medium ${connected ? "text-green-700" : "text-slate-500"}`}>
             <span className={`w-2.5 h-2.5 rounded-full ${connected ? "bg-green-500" : "bg-slate-400"}`} />
-            {STATUS_LABEL[bt.status]}
+            {statusText}
           </span>
           {connected ? (
             <button
@@ -147,7 +183,7 @@ export default function Captura() {
           ) : (
             <>
               <button onClick={() => bt.connect()} disabled={bt.status === CONNECTION_STATUS.CONNECTING} className={btnPrimary}>
-                Conectar a micro:bit
+                {bt.recentDevices.length > 0 ? "Buscar otro dispositivo" : "Conectar a micro:bit"}
               </button>
               <button
                 onClick={() => bt.connect({ acceptAll: true })}
@@ -159,6 +195,35 @@ export default function Captura() {
             </>
           )}
         </div>
+        {!connected && bt.recentDevices.length > 0 && (
+          <div className="mt-4">
+            <p className="text-xs text-slate-500 mb-2">Dispositivos recientes</p>
+            <ul className="space-y-2">
+              {bt.recentDevices.map((d) => (
+                <li key={d.id} className="flex items-center gap-2 flex-wrap text-sm">
+                  <button
+                    onClick={() => bt.connect({ deviceId: d.id })}
+                    disabled={bt.status === CONNECTION_STATUS.CONNECTING}
+                    className={btn}
+                    title={d.direct ? "Reconecta sin abrir el selector" : "Abre el selector del navegador"}
+                  >
+                    {d.name}
+                  </button>
+                  <span className="text-xs text-slate-400">
+                    último uso {new Date(d.lastUsed).toLocaleDateString()}
+                    {d.direct ? "" : " · se elegirá en el selector"}
+                  </span>
+                  <button
+                    onClick={() => bt.forgetDevice(d.id)}
+                    className="text-xs text-slate-400 underline hover:text-slate-600"
+                  >
+                    Olvidar
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {bt.error && (
           <p className="mt-3 text-sm text-red-600" role="alert">
             {bt.error}
@@ -166,11 +231,15 @@ export default function Captura() {
         )}
       </div>
 
-      {connected && (
+      {(connected || hasData) && (
         <div className={card}>
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
             <p className="text-xs text-slate-400">Sesión: {bt.sessionId}</p>
-            {bt.sessionActive ? (
+            {!connected ? (
+              <span role="status" className="px-3 py-1 rounded-md text-sm font-medium bg-amber-100 text-amber-800">
+                Sin conexión: la sesión sigue en pantalla
+              </span>
+            ) : bt.sessionActive ? (
               <span role="status" className="px-3 py-1 rounded-md text-sm font-semibold bg-green-600 text-white">
                 Sesión activa
               </span>
@@ -186,7 +255,14 @@ export default function Captura() {
             <Stat value={`${bt.basketCount}/${bt.shotCount}`} label={`canastas (${porcentaje}%)`} />
             {bt.invalidLineCount > 0 && <Stat value={bt.invalidLineCount} label="líneas corruptas" warn />}
             {bt.ignoredBasketCount > 0 && <Stat value={bt.ignoredBasketCount} label="B sin tiro previo" warn />}
+            {bt.interruptedCount > 0 && <Stat value={bt.interruptedCount} label="tiros interrumpidos" warn />}
           </div>
+          {connected && !bt.sessionActive && hasData && (
+            <p className="mb-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-3" role="status">
+              Tras reconectar, el primer B solo reactiva la sesión y <strong>no cuenta como canasta</strong>. Si el
+              último tiro fue canasta, no la marques con ese B: se anotaría como fallo.
+            </p>
+          )}
           <PowerChart samples={bt.recentSamples} />
           <div className="flex gap-2 flex-wrap mt-4">
             <button onClick={handleSave} disabled={!hasData || saving} className={btnPrimary}>

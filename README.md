@@ -163,6 +163,7 @@ correr el notebook del paso 5 para incluirla en el análisis.
 | `x/y/z`     | int    | Aceleración en mg                     |
 | `potencia`  | float  | Magnitud √(x²+y²+z²)                  |
 | `cesta`     | int    | 1 = canasta, 0 = fallo                |
+| `interrumpido` | int | Opcional. 1 = el BLE se cayó durante el tiro (captura en vivo); si falta, 0 |
 
 `data/processed/sesion_procesada_N.csv` y `data/db/BD_tiros.csv` comparten
 este mismo esquema, pero `tiro` significa cosas distintas: en el primero es
@@ -381,9 +382,27 @@ firmware probados que empeoran el problema: handlers
 `onBluetoothConnected/Disconnected` y enviar `x,y,z` en una sola escritura UART.
 
 **Reconexión:** si se cae el BLE a mitad de sesión, el cliente reconecta solo
-(hasta 5 intentos), descarta la línea parcial pendiente y deja un único
-listener; hay que volver a activar la sesión con B. Si la placa seguía
-capturando, el tiro en curso abarca el hueco de la caída.
+(hasta 5 intentos, "Reconectando a <placa> (intento n/5)"), descarta la línea
+parcial pendiente y deja un único listener; hay que volver a activar la sesión
+con B, y **ese primer B no cuenta como canasta** (la pantalla lo avisa). Si la
+caída ocurre con un tiro abierto, ese tiro se marca como **interrumpido**: se
+guarda igual (columna `interrumpido` del CSV y de la tabla `shots`, insignia en
+el detalle de la sesión) pero no se excluye de ninguna métrica, porque puede
+faltarle el tramo del hueco. Si se agotan los intentos, conectar de nuevo **no
+borra lo capturado** (solo "Nueva sesión" reinicia) y los botones de guardar y
+descargar siguen disponibles sin conexión.
+
+**Sesión en `localStorage`:** mientras captura, la sesión se copia al
+almacenamiento local (como mucho cada 2 s). Si se recarga o se cierra la
+pestaña, `#/captura` ofrece **Recuperar** o **Descartar**; la copia se borra al
+guardar en el backend, al iniciar una nueva sesión o al descartarla. El
+navegador avisa antes de cerrar la pestaña con una sesión sin guardar.
+
+**Dispositivos recordados:** las placas conectadas se guardan (nombre e id, máx.
+5) y aparecen como "Dispositivos recientes", con opción de **Olvidar**. Donde el
+navegador expone `navigator.bluetooth.getDevices()` (Chrome/Edge con permisos
+persistentes) reconectan sin abrir el selector; si no existe o falla (hay que
+confirmar en Bluefy/iOS), se abre el selector normal.
 
 **Sesiones largas:** las muestras se acumulan en un `ref` (no en estado de
 React) y la pantalla se refresca como mucho cada 250 ms; el gráfico usa solo las
@@ -433,7 +452,8 @@ Notas de la config para que funcione bajo un subpath de GitHub Pages
 - [ ] Modelo de ML para predicción de acierto (rama `feature/ml-predictor`, hoy vacía: se rehará desde cero)
 - [x] Captura en vivo por Web Bluetooth (página `#/captura` del dashboard; guarda vía `POST /api/sesion`, convive con la carga de CSV raw)
 - [ ] Resolver el error 020 al primer A tras conectar (hoy: activar la sesión con B); requiere entender el consumo de RAM de la micro:bit con BLE UART
-- [ ] Marcar como "interrumpida" una sesión en la que se cayó el BLE a mitad de un tiro
+- [x] Marcar como interrumpido el tiro en el que se cayó el BLE (se marca, no se excluye de las métricas)
+- [ ] Probar con la placa: caída a mitad de tiro, recuperar sesión tras recargar y `getDevices()` en Chrome/Bluefy
 - [ ] `/api/upload` espera el formato de log del firmware anterior (`tiro,x,y,z` con `E`/`B`); el firmware actual manda `x,y,z`. Unificar o migrar el parser de logs crudos
 - [ ] `/api/upload` usa la fecha del servidor (UTC), igual desfase que ya se corrigió en `/api/sesion`
 - [ ] Rate limiting en el backend (opcional, no bloqueante para el MVP)
