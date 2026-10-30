@@ -13,6 +13,12 @@ import {
 import { LineBuffer, parseLine, EVENT_TYPES } from "../services/ble-parser";
 import { buildCsvBlob } from "../services/csv-generator";
 import { saveSnapshot, loadSnapshot, clearSnapshot } from "../services/session-store";
+import {
+  enableKeepAwake,
+  disableKeepAwake,
+  onKeepAwakeChange,
+  getKeepAwakeMode,
+} from "../services/keep-awake";
 
 export const CONNECTION_STATUS = {
   DISCONNECTED: "disconnected",
@@ -69,6 +75,7 @@ export function useBluetooth() {
   const [recentDevices, setRecentDevices] = useState([]);
   // Sesion sin guardar encontrada en localStorage al abrir la pagina.
   const [pendingSnapshot, setPendingSnapshot] = useState(() => loadSnapshot());
+  const [keepAwakeMode, setKeepAwakeMode] = useState(getKeepAwakeMode());
 
   const samplesRef = useRef([]);
   const flushTimerRef = useRef(null);
@@ -272,6 +279,14 @@ export function useBluetooth() {
     refreshRecentDevices();
   }, [refreshRecentDevices]);
 
+  useEffect(() => {
+    const unsubscribe = onKeepAwakeChange(setKeepAwakeMode);
+    return () => {
+      unsubscribe();
+      disableKeepAwake();
+    };
+  }, []);
+
   // Al cerrar la pestaña, escribir al instante lo que haya pendiente.
   useEffect(() => {
     const onPageHide = () => writeSnapshotNow();
@@ -295,6 +310,8 @@ export function useBluetooth() {
     sessionActiveRef.current = false;
     setSessionActive(false);
     lineBufferRef.current = new LineBuffer();
+    // Sin await: debe arrancar dentro del gesto del usuario y no retrasar el selector.
+    enableKeepAwake();
 
     try {
       const { device } = await connectToMicrobit({
@@ -312,6 +329,7 @@ export function useBluetooth() {
     } catch (err) {
       setError(err.message || String(err));
       setStatus(CONNECTION_STATUS.DISCONNECTED);
+      disableKeepAwake();
     } finally {
       connectingRef.current = false;
     }
@@ -321,6 +339,7 @@ export function useBluetooth() {
     intentionalDisconnectRef.current = true;
     await disconnectFromMicrobit(deviceRef.current);
     setStatus(CONNECTION_STATUS.DISCONNECTED);
+    disableKeepAwake();
   }, []);
 
   const forgetKnownDevice = useCallback(
@@ -378,6 +397,7 @@ export function useBluetooth() {
     ignoredBasketCount,
     error,
     deviceName,
+    keepAwakeMode,
     reconnectAttempt,
     recentDevices,
     pendingSnapshot,

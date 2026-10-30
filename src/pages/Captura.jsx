@@ -234,7 +234,19 @@ export default function Captura() {
       {(connected || hasData) && (
         <div className={card}>
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-            <p className="text-xs text-slate-400">Sesión: {bt.sessionId}</p>
+            <div>
+              <p className="text-xs text-slate-400">Sesión: {bt.sessionId}</p>
+              {connected && bt.keepAwakeMode === "failed" ? (
+                <p className="text-xs text-amber-700">
+                  No se pudo mantener la pantalla encendida: no bloquees el teléfono o se perderá la captura.
+                </p>
+              ) : (
+                connected &&
+                bt.keepAwakeMode !== "off" && (
+                  <p className="text-xs text-slate-400">Pantalla: se mantiene encendida</p>
+                )
+              )}
+            </div>
             {!connected ? (
               <span role="status" className="px-3 py-1 rounded-md text-sm font-medium bg-amber-100 text-amber-800">
                 Sin conexión: la sesión sigue en pantalla
