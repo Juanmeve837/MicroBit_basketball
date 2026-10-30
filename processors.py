@@ -122,7 +122,9 @@ def process_raw_log(raw_text: str, session_id: str = None) -> Tuple[pd.DataFrame
 
 
 def compute_tiro_metrics(df: pd.DataFrame) -> List[Dict[str, Any]]:
-    """Agrega el DataFrame por tiro: muestras, potencia max/avg/min, cesta."""
+    """Agrega el DataFrame por tiro: muestras, potencia max/avg/min, cesta, interrumpido."""
+    if "interrumpido" not in df.columns:
+        df = df.assign(interrumpido=0)
     resumen = (
         df.groupby("tiro")
         .agg(
@@ -131,11 +133,13 @@ def compute_tiro_metrics(df: pd.DataFrame) -> List[Dict[str, Any]]:
             potencia_avg=("potencia", "mean"),
             potencia_min=("potencia", "min"),
             cesta=("cesta", "first"),
+            interrumpido=("interrumpido", "max"),
         )
         .round(2)
         .reset_index()
     )
     resumen["cesta"] = resumen["cesta"].astype(bool)
+    resumen["interrumpido"] = resumen["interrumpido"].astype(bool)
     return resumen.to_dict(orient="records")
 
 

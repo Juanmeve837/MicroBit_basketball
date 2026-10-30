@@ -82,7 +82,17 @@ export default function Dashboard({ session }) {
             <tbody>
               {sortedTiros.map((t) => (
                 <tr key={t.tiro} className="border-b border-slate-100">
-                  <td className="py-2 px-2">{t.tiro}</td>
+                  <td className="py-2 px-2">
+                    {t.tiro}
+                    {t.interrumpido && (
+                      <span
+                        className="ml-2 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800"
+                        title="La conexión BLE se cayó durante este tiro: puede faltar un tramo de muestras"
+                      >
+                        interrumpido
+                      </span>
+                    )}
+                  </td>
                   <td className="py-2 px-2">{t.muestras}</td>
                   <td className="py-2 px-2">{t.potencia_max}</td>
                   <td className="py-2 px-2">{t.potencia_avg}</td>

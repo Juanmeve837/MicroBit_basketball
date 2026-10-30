@@ -19,6 +19,7 @@ class TiroData(BaseModel):
     potencia_avg: float
     potencia_min: float
     cesta: bool
+    interrumpido: bool = False
 
 
 class SessionInput(BaseModel):

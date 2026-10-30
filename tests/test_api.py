@@ -156,3 +156,64 @@ def test_comparar_sesiones_empty():
     resp = client.get("/api/compare")
     assert resp.status_code == 200
     assert resp.json() == {"sessions": [], "samples": []}
+
+
+CSV_HEADER = "timestamp,session,tiro,x,y,z,potencia,cesta"
+
+
+def _csv_sesion(session_id, interrumpido_por_tiro=None):
+    """CSV de captura en vivo con 2 tiros de 2 muestras; `interrumpido_por_tiro`
+    agrega la columna opcional `interrumpido` (dict tiro -> 0/1)."""
+    header = CSV_HEADER + (",interrumpido" if interrumpido_por_tiro is not None else "")
+    filas = [header]
+    for tiro, cesta in ((1, 0), (2, 1)):
+        for _ in range(2):
+            fila = f"10:00:00.000,{session_id},{tiro},3,4,0,5.0,{cesta}"
+            if interrumpido_por_tiro is not None:
+                fila += f",{interrumpido_por_tiro[tiro]}"
+            filas.append(fila)
+    return "\n".join(filas) + "\n"
+
+
+def test_sesion_csv_persists_interrupted_shots():
+    csv = _csv_sesion("20260101_ABCD1234", {1: 0, 2: 1})
+    resp = client.post("/api/sesion", files={"file": ("s.csv", csv, "text/csv")})
+    assert resp.status_code == 200
+    assert [t["interrumpido"] for t in resp.json()["tiros"]] == [False, True]
+
+    detalle = client.get("/api/sessions/20260101_ABCD1234").json()
+    assert [t["interrumpido"] for t in detalle["tiros"]] == [False, True]
+
+
+def test_sesion_csv_without_interrupted_column_defaults_to_false():
+    csv = _csv_sesion("20260101_EFGH5678")
+    resp = client.post("/api/sesion", files={"file": ("s.csv", csv, "text/csv")})
+    assert resp.status_code == 200
+
+    detalle = client.get("/api/sessions/20260101_EFGH5678").json()
+    assert [t["interrumpido"] for t in detalle["tiros"]] == [False, False]
+
+
+def test_connect_migrates_shots_table_without_interrupted_column(tmp_path, monkeypatch):
+    import libsql
+
+    db_file = tmp_path / "old.db"
+    conn = libsql.connect(database=str(db_file))
+    cur = conn.cursor()
+    cur.execute(
+        "CREATE TABLE shots (id INTEGER PRIMARY KEY AUTOINCREMENT, session TEXT NOT NULL, "
+        "timestamp TEXT, tiro INTEGER NOT NULL, x INTEGER, y INTEGER, z INTEGER, "
+        "potencia REAL, cesta INTEGER NOT NULL)"
+    )
+    cur.execute("INSERT INTO shots (session, timestamp, tiro, x, y, z, potencia, cesta) VALUES ('viejo','t',1,1,2,3,3.7,1)")
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(database, "DB_PATH", db_file)
+    conn = database._connect()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT interrumpido FROM shots WHERE session = 'viejo'")
+        assert cur.fetchall() == [(0,)]
+    finally:
+        conn.close()

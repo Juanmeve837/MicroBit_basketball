@@ -18,7 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "data" / "db" / "basket.db"
 
 SESSION_COLUMNS = ["session_id", "date", "num_tiros", "total_canastas", "efectividad", "potencia_avg"]
-SHOT_COLUMNS = ["timestamp", "session", "tiro", "x", "y", "z", "potencia", "cesta"]
+SHOT_COLUMNS = ["timestamp", "session", "tiro", "x", "y", "z", "potencia", "cesta", "interrumpido"]
 
 
 def _connect():
@@ -54,9 +54,15 @@ def _connect():
             tiro INTEGER NOT NULL,
             x INTEGER, y INTEGER, z INTEGER,
             potencia REAL,
-            cesta INTEGER NOT NULL
+            cesta INTEGER NOT NULL,
+            interrumpido INTEGER NOT NULL DEFAULT 0
         )"""
     )
+    # CREATE TABLE IF NOT EXISTS no altera tablas existentes (p. ej. la base de
+    # Turso en produccion): agregar la columna si falta.
+    cur.execute("PRAGMA table_info(shots)")
+    if "interrumpido" not in [row[1] for row in cur.fetchall()]:
+        cur.execute("ALTER TABLE shots ADD COLUMN interrumpido INTEGER NOT NULL DEFAULT 0")
     conn.commit()
     return conn
 
@@ -86,6 +92,10 @@ def save_session(df: pd.DataFrame, summary: Dict[str, Any]) -> None:
         if _session_exists(conn, session_id):
             raise ValueError(f"La sesion '{session_id}' ya existe")
 
+        # Los CSV sin la columna (log crudo, capturas viejas) no traen tiros interrumpidos.
+        if "interrumpido" not in df.columns:
+            df = df.assign(interrumpido=0)
+
         cur = conn.cursor()
         cur.execute(
             "INSERT INTO sessions (session_id, date, num_tiros, total_canastas, efectividad, potencia_avg) "
@@ -110,12 +120,13 @@ def save_session(df: pd.DataFrame, summary: Dict[str, Any]) -> None:
                 None if pd.isna(rec["z"]) else int(rec["z"]),
                 None if pd.isna(rec["potencia"]) else float(rec["potencia"]),
                 int(bool(rec["cesta"])),
+                int(bool(rec["interrumpido"])),
             )
             for rec in df[SHOT_COLUMNS].to_dict(orient="records")
         ]
         cur.executemany(
-            "INSERT INTO shots (timestamp, session, tiro, x, y, z, potencia, cesta) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO shots (timestamp, session, tiro, x, y, z, potencia, cesta, interrumpido) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             rows,
         )
         conn.commit()

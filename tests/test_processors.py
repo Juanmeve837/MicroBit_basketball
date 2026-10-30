@@ -95,3 +95,20 @@ def test_generate_session_id_has_date_prefix():
 
     session_id = processors.generate_session_id()
     assert session_id.startswith(datetime.now().strftime("%Y%m%d"))
+
+
+def test_compute_tiro_metrics_marks_interrupted_shots(sample_raw_log):
+    df, _ = processors.process_raw_log(sample_raw_log, session_id="t")
+    df["interrumpido"] = (df["tiro"] == 2).astype(int)
+
+    tiros = processors.compute_tiro_metrics(df)
+
+    assert [t["interrumpido"] for t in tiros] == [False, True]
+
+
+def test_compute_tiro_metrics_without_interrupted_column_defaults_to_false(sample_raw_log):
+    df, _ = processors.process_raw_log(sample_raw_log, session_id="t")
+
+    tiros = processors.compute_tiro_metrics(df)
+
+    assert [t["interrumpido"] for t in tiros] == [False, False]
