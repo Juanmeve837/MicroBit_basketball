@@ -19,6 +19,8 @@ DB_PATH = BASE_DIR / "data" / "db" / "basket.db"
 
 SESSION_COLUMNS = ["session_id", "date", "num_tiros", "total_canastas", "efectividad", "potencia_avg"]
 SHOT_COLUMNS = ["timestamp", "session", "tiro", "x", "y", "z", "potencia", "cesta", "interrumpido"]
+# 9 parametros por fila: 500 filas = 4500, bajo el limite de variables de SQLite (32766).
+INSERT_CHUNK = 500
 
 
 def _connect():
@@ -124,11 +126,15 @@ def save_session(df: pd.DataFrame, summary: Dict[str, Any]) -> None:
             )
             for rec in df[SHOT_COLUMNS].to_dict(orient="records")
         ]
-        cur.executemany(
-            "INSERT INTO shots (timestamp, session, tiro, x, y, z, potencia, cesta, interrumpido) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            rows,
-        )
+        # INSERT multi-fila por bloques: con Turso remoto cada sentencia es un viaje
+        # de red, y executemany fila a fila hacia lento el cierre de sesiones largas.
+        for i in range(0, len(rows), INSERT_CHUNK):
+            chunk = rows[i:i + INSERT_CHUNK]
+            cur.execute(
+                "INSERT INTO shots (timestamp, session, tiro, x, y, z, potencia, cesta, interrumpido) VALUES "
+                + ", ".join(["(?, ?, ?, ?, ?, ?, ?, ?, ?)"] * len(chunk)),
+                [v for row in chunk for v in row],
+            )
         conn.commit()
     finally:
         conn.close()

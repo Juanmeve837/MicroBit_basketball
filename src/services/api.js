@@ -49,6 +49,12 @@ export async function postSesionCsv(csv, sessionId) {
   return data;
 }
 
+// Despierta el backend (Render free se duerme tras ~15 min) para que el
+// guardado al cerrar la sesion no pague el arranque en frio. Fallar aqui no importa.
+export function wakeServer() {
+  client.get("/health").catch(() => {});
+}
+
 export async function getSessions({ dateFrom, dateTo, sortBy, order } = {}) {
   const { data } = await client.get("/sessions", {
     params: { date_from: dateFrom, date_to: dateTo, sort_by: sortBy, order },
