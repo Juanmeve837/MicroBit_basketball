@@ -9,6 +9,8 @@ export default function UploadForm() {
   const [status, setStatus] = useState("idle"); // idle | uploading | success | error
   const [progress, setProgress] = useState(0);
   const [errorMsg, setErrorMsg] = useState("");
+  // El log de nRF Connect solo trae la hora: la fecha de la sesion la elige el usuario (hoy, local).
+  const [fecha, setFecha] = useState(() => new Date().toLocaleDateString("en-CA"));
   const inputRef = useRef(null);
   const navigate = useNavigate();
 
@@ -52,12 +54,12 @@ export default function UploadForm() {
     setProgress(0);
     setErrorMsg("");
     try {
-      const result = await uploadCsv(file, setProgress);
+      const sessionId = `${fecha.replaceAll("-", "")}_${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+      const result = await uploadCsv(file, setProgress, sessionId);
       invalidate();
       setStatus("success");
-      const sessionId = result?.session_id;
-      if (sessionId) {
-        navigate(`/sessions/${sessionId}`);
+      if (result?.session_id) {
+        navigate(`/sessions/${result.session_id}`);
       }
     } catch (err) {
       setStatus("error");
@@ -101,6 +103,18 @@ export default function UploadForm() {
         )}
       </div>
 
+      <label className="mt-4 flex items-center gap-2 text-sm text-slate-600">
+        Fecha de la sesión
+        <input
+          type="date"
+          value={fecha}
+          max={new Date().toLocaleDateString("en-CA")}
+          onChange={(e) => setFecha(e.target.value)}
+          required
+          className="border border-slate-300 rounded-md px-2 py-1"
+        />
+      </label>
+
       {status === "error" && errorMsg && (
         <p className="mt-3 text-sm text-red-600" role="alert">
           {errorMsg}
@@ -127,7 +141,7 @@ export default function UploadForm() {
 
       <button
         onClick={onSubmit}
-        disabled={!file || status === "uploading"}
+        disabled={!file || !fecha || status === "uploading"}
         className="mt-4 w-full sm:w-auto px-5 py-2 rounded-md bg-court-orange text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-orange-700 transition-colors"
       >
         {status === "uploading" ? "Subiendo…" : "Subir sesión"}

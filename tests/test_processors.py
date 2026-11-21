@@ -22,6 +22,16 @@ def test_process_raw_log_builds_expected_dataframe(sample_raw_log):
     assert df[df["tiro"] == 2]["cesta"].unique().tolist() == [1]
 
 
+def test_process_raw_log_accepts_current_firmware_format():
+    # Firmware actual: muestras `x,y,z` sin numero de tiro; B activa la sesion y marca canasta.
+    raw = build_raw_log(["B", "3,4,0", "0,3,4", "E", "3,4,0", "E", "B", "4,3,0", "END", "BASKET"])
+    df, _ = processors.process_raw_log(raw, session_id="fw-actual")
+
+    assert list(df["tiro"]) == [1, 1, 2, 3]
+    assert list(df["potencia"]) == [5.0, 5.0, 5.0, 5.0]
+    assert df.groupby("tiro")["cesta"].first().tolist() == [0, 1, 1]
+
+
 def test_process_raw_log_raises_when_no_fragments():
     with pytest.raises(ValueError, match="fragmentos BLE"):
         processors.process_raw_log("texto sin formato BLE")

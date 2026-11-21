@@ -108,7 +108,8 @@ primera pulsación inicia la captura, la segunda la detiene y cierra el tiro);
 
 1. **Manual (nRF Connect):** exportar el log desde nRF Connect (Android/iOS)
    como CSV y guardarlo en `data/raw/`; o subirlo desde el dashboard
-   (`Inicio → Subir sesión`, endpoint `/api/upload`).
+   (`Inicio → Subir sesión`, endpoint `/api/upload`), indicando la fecha de
+   la sesión (el log de nRF Connect solo trae la hora).
 2. **En vivo (Web Bluetooth):** desde la página `#/captura` del dashboard, ver
    [Captura en vivo](#captura-en-vivo-web-bluetooth).
 
@@ -219,7 +220,7 @@ de análisis.
 | Metodo | Ruta                       | Descripcion                                              |
 |--------|----------------------------|-----------------------------------------------------------|
 | GET    | `/api/health`              | Healthcheck                                                |
-| POST   | `/api/upload`               | Sube un log BLE crudo (`multipart/form-data`, campo `file`); opcional `session_id` como query param. Devuelve `SesionOutput` con metricas por tiro. |
+| POST   | `/api/upload`               | Sube un log BLE crudo (`multipart/form-data`, campo `file`); opcional `session_id` como query param. Acepta logs del firmware actual (`x,y,z`) y del anterior (`tiro,x,y,z`). La fecha sale del prefijo `YYYYMMDD` del `session_id` (el formulario de Inicio pide la fecha de la sesión). Devuelve `SesionOutput` con metricas por tiro. |
 | POST   | `/api/sesion`               | Sesión ya armada por la captura en vivo (`multipart/form-data`: `file` = CSV `timestamp,session,tiro,x,y,z,potencia,cesta`, `session_id` opcional). Misma respuesta (`SesionOutput`) y misma persistencia que `/api/upload`. La fecha sale del prefijo `YYYYMMDD` del `session_id`. |
 | GET    | `/api/sessions`             | Lista sesiones (resumen). Query opcionales: `date_from`, `date_to` (ISO `YYYY-MM-DD`), `sort_by`, `order` (`asc`/`desc`). |
 | GET    | `/api/sessions/{session_id}` | Detalle completo de una sesion (metricas por tiro, ejes, consistencia) |

@@ -103,6 +103,8 @@ async def upload_sesion(
         logger.warning("Sesion %s generada con inconsistencias: %s", resolved_session_id, errors)
 
     summary = processors.compute_session_summary(df, resolved_session_id)
+    # El log solo trae horas y el servidor corre en UTC: la fecha sale del prefijo YYYYMMDD del session_id.
+    summary["date"] = _date_from_session_id(resolved_session_id) or summary["date"]
 
     try:
         database.save_session(df, summary)

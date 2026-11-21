@@ -17,10 +17,11 @@ client.interceptors.response.use(
   }
 );
 
-export async function uploadCsv(file, onProgress) {
+export async function uploadCsv(file, onProgress, sessionId) {
   const formData = new FormData();
   formData.append("file", file);
   const { data } = await client.post("/upload", formData, {
+    params: { session_id: sessionId },
     headers: { "Content-Type": "multipart/form-data" },
     onUploadProgress: (evt) => {
       if (onProgress && evt.total) {

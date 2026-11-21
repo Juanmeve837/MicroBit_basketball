@@ -43,6 +43,16 @@ def test_upload_sesion_success(sample_raw_log):
     assert len(body["tiros"]) == 2
 
 
+def test_upload_sesion_takes_date_from_session_id(sample_raw_log):
+    resp = client.post(
+        "/api/upload",
+        files={"file": ("log.csv", sample_raw_log, "text/csv")},
+        params={"session_id": "20260315_UPLDATE1"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["date"] == "2026-03-15"
+
+
 def test_upload_sesion_rejects_empty_file():
     resp = client.post("/api/upload", files={"file": ("log.csv", b"", "text/csv")})
     assert resp.status_code == 400

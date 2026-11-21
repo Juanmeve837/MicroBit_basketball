@@ -42,24 +42,32 @@ def rebuild_ble_lines(fragmentos: List[Tuple[str, str]]) -> List[Tuple[str, str]
 
 
 def parse_events(lineas_ble: List[Tuple[str, str]]) -> List[dict]:
-    """Convierte lineas BLE en eventos tipados (D=data, E=end, B=basket)."""
+    """Convierte lineas BLE en eventos tipados (D=data, E=end, B=basket).
+
+    Acepta los dos formatos de firmware: el anterior manda `tiro,x,y,z` y el
+    actual solo `x,y,z` (el tiro se deduce contando los fin de tiro `E`).
+    """
     eventos = []
+    tiro_actual = 1
+    # Un log es de un solo firmware: si trae lineas `tiro,x,y,z`, las de 3 campos son fragmentos corruptos.
+    campos = 4 if any(linea.count(",") == 3 for _, linea in lineas_ble) else 3
     for ts, linea in lineas_ble:
-        if linea == "E":
+        if linea in ("E", "END"):
             eventos.append({"ts": ts, "tipo": "E", "tiro": None, "x": None, "y": None, "z": None})
-        elif linea == "B":
+            tiro_actual += 1
+        elif linea in ("B", "BASKET"):
             eventos.append({"ts": ts, "tipo": "B", "tiro": None, "x": None, "y": None, "z": None})
         else:
             partes = linea.split(",")
-            if len(partes) == 4:
-                try:
-                    eventos.append({
-                        "ts": ts, "tipo": "D",
-                        "tiro": int(partes[0]), "x": int(partes[1]),
-                        "y": int(partes[2]), "z": int(partes[3]),
-                    })
-                except ValueError:
-                    continue
+            if len(partes) != campos:
+                continue
+            try:
+                valores = [int(p) for p in partes]
+            except ValueError:
+                continue
+            tiro = valores.pop(0) if campos == 4 else tiro_actual
+            x, y, z = valores
+            eventos.append({"ts": ts, "tipo": "D", "tiro": tiro, "x": x, "y": y, "z": z})
     return eventos
 
 
