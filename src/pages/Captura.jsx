@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { CONNECTION_STATUS, MAX_RECONNECT_ATTEMPTS, useBluetooth } from "../hooks/useBluetooth.js";
 import { isWebBluetoothSupported } from "../services/bluetooth.js";
 import { downloadCsv } from "../services/csv-generator.js";
-import { postSesionCsv } from "../services/api.js";
+import { postSesionCsv, wakeServer } from "../services/api.js";
 import { invalidate } from "../services/sessionCache.js";
 
 const MAX_PUNTOS_GRAFICO = 150;
+const WAKE_INTERVAL_MS = 10 * 60 * 1000; // menor que los ~15 min de inactividad de Render free
 const STATUS_LABEL = {
   [CONNECTION_STATUS.DISCONNECTED]: "Desconectado",
   [CONNECTION_STATUS.CONNECTING]: "Conectando…",
@@ -61,9 +62,9 @@ const btnPrimary =
 
 export default function Captura() {
   const bt = useBluetooth();
-  const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [savedId, setSavedId] = useState("");
 
   const connected = [
     CONNECTION_STATUS.CONNECTED,
@@ -87,6 +88,15 @@ export default function Captura() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [hasData]);
 
+  // Mantener el backend despierto mientras se captura: el guardado final no espera el arranque en frio.
+  const capturing = connected || hasData;
+  useEffect(() => {
+    if (!capturing) return undefined;
+    wakeServer();
+    const id = setInterval(wakeServer, WAKE_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [capturing]);
+
   const porcentaje = bt.shotCount > 0 ? Math.round((bt.basketCount / bt.shotCount) * 100) : 0;
 
   const handleDownload = () => {
@@ -102,7 +112,9 @@ export default function Captura() {
       const result = await postSesionCsv(blob, sessionId);
       bt.markSaved();
       invalidate();
-      navigate(`/sessions/${result?.session_id || sessionId}`);
+      // Solo confirmar: las metricas se cargan aparte, si el usuario las pide.
+      setSavedId(result?.session_id || sessionId);
+      bt.newSession();
     } catch (err) {
       setSaveError(err.message);
     } finally {
@@ -130,6 +142,19 @@ export default function Captura() {
 
   return (
     <div className="space-y-6">
+      {savedId && (
+        <div className="rounded-lg border border-green-300 bg-green-50 p-4 text-sm" role="status">
+          <p className="text-green-900 font-medium">Sesión {savedId} guardada en el servidor.</p>
+          <div className="flex gap-2 mt-3 flex-wrap">
+            <Link to={`/sessions/${savedId}`} className={btnPrimary}>
+              Ver métricas
+            </Link>
+            <button onClick={() => setSavedId("")} className={btn}>
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
       {bt.pendingSnapshot && !hasData && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm" role="status">
           <p className="text-amber-900">

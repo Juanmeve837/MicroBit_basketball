@@ -25,6 +25,7 @@ logs/
 *.log
 
 # Datos que NO commiteamos (subir manualmente si es necesario)
+data/
 data/raw/
 data/backup/
 *.csv
