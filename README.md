@@ -109,6 +109,9 @@ primera pulsación inicia la captura, la segunda la detiene y cierra el tiro);
 1. **Manual (nRF Connect):** exportar el log desde nRF Connect (Android/iOS)
    como CSV y guardarlo en `data/raw/`; o subirlo desde el dashboard
    (`Inicio → Subir sesión`, endpoint `/api/upload`).
+   > ⚠️ Este camino (y `scripts/procesar_sesion.py`) espera el formato del
+   > firmware anterior (`tiro,x,y,z`). El firmware actual manda `x,y,z`, así
+   > que sus logs no se procesan: usar la captura en vivo.
 2. **En vivo (Web Bluetooth):** desde la página `#/captura` del dashboard, ver
    [Captura en vivo](#captura-en-vivo-web-bluetooth).
 
@@ -415,6 +418,15 @@ pestaña, `#/captura` ofrece **Recuperar** o **Descartar**; la copia se borra al
 guardar en el backend, al iniciar una nueva sesión o al descartarla. El
 navegador avisa antes de cerrar la pestaña con una sesión sin guardar.
 
+**Guardado rápido:** **Guardar sesión** solo sube el CSV y espera la
+confirmación del servidor; no carga el detalle. Al confirmar se muestra
+"Sesión … guardada" con el botón **Ver métricas** (el detalle se calcula al
+abrirlo) y la pantalla queda lista para una sesión nueva. Para que el cierre no
+pague el arranque en frío de Render free, mientras hay captura el cliente
+llama a `/api/health` al empezar y cada 10 min. El backend inserta las
+muestras en bloques de 500 filas por sentencia (con Turso cada sentencia es un
+viaje de red).
+
 **Dispositivos recordados:** las placas conectadas se guardan (nombre e id, máx.
 5) y aparecen como "Dispositivos recientes", con opción de **Olvidar**. Donde el
 navegador expone `navigator.bluetooth.getDevices()` (Chrome/Edge con permisos
@@ -466,12 +478,12 @@ Notas de la config para que funcione bajo un subpath de GitHub Pages
 
 - [x] API FastAPI para consumo en tiempo real — ver sección Backend
 - [x] Dashboard web (React) — ver sección Frontend
-- [ ] Modelo de ML para predicción de acierto (rama `feature/ml-predictor`, hoy vacía: se rehará desde cero)
+- [ ] Modelo de ML para predicción de acierto: se rehará desde cero (el intento anterior, `feature/ml-predictor`, llegó a ~55% de acierto y la rama se eliminó)
 - [x] Captura en vivo por Web Bluetooth (página `#/captura` del dashboard; guarda vía `POST /api/sesion`, convive con la carga de CSV raw)
 - [ ] Resolver el error 020 al primer A tras conectar (hoy: activar la sesión con B); requiere entender el consumo de RAM de la micro:bit con BLE UART
 - [x] Marcar como interrumpido el tiro en el que se cayó el BLE (se marca, no se excluye de las métricas)
-- [ ] Probar con la placa: caída a mitad de tiro, recuperar sesión tras recargar y `getDevices()` en Chrome/Bluefy
-- [ ] `/api/upload` espera el formato de log del firmware anterior (`tiro,x,y,z` con `E`/`B`); el firmware actual manda `x,y,z`. Unificar o migrar el parser de logs crudos
+- [ ] Probar con la placa: caída a mitad de tiro, recuperar sesión tras recargar, `getDevices()` en Chrome/Bluefy y tiempo de guardado de una sesión larga (>15 min) en producción
+- [ ] `/api/upload` y `scripts/procesar_sesion.py` esperan el formato de log del firmware anterior (`tiro,x,y,z` con `E`/`B`; `parse_events` exige 4 campos); el firmware actual manda `x,y,z`, así que hoy los logs de nRF Connect no se procesan. Unificar o migrar el parser de logs crudos
 - [ ] `/api/upload` usa la fecha del servidor (UTC), igual desfase que ya se corrigió en `/api/sesion`
 - [ ] Rate limiting en el backend (opcional, no bloqueante para el MVP)
 - [x] Migrar la persistencia del backend de CSV+JSON a SQLite/Turso (ver sección Backend → Deploy)
