@@ -109,9 +109,6 @@ primera pulsación inicia la captura, la segunda la detiene y cierra el tiro);
 1. **Manual (nRF Connect):** exportar el log desde nRF Connect (Android/iOS)
    como CSV y guardarlo en `data/raw/`; o subirlo desde el dashboard
    (`Inicio → Subir sesión`, endpoint `/api/upload`).
-   > ⚠️ Este camino (y `scripts/procesar_sesion.py`) espera el formato del
-   > firmware anterior (`tiro,x,y,z`). El firmware actual manda `x,y,z`, así
-   > que sus logs no se procesan: usar la captura en vivo.
 2. **En vivo (Web Bluetooth):** desde la página `#/captura` del dashboard, ver
    [Captura en vivo](#captura-en-vivo-web-bluetooth).
 
@@ -444,7 +441,6 @@ filas y ~670 KB): el CSV sale idéntico y el guardado tarda ~1 s.
 
 **Fechas:** el servidor corre en UTC; el `session_id` (`YYYYMMDD_xxxxxxxx`) se
 genera con la fecha *local* del cliente y `/api/sesion` toma la fecha de ahí.
-`/api/upload` (log crudo) todavía usa la fecha del servidor (UTC).
 
 ### Contrato de API
 
@@ -482,10 +478,7 @@ Notas de la config para que funcione bajo un subpath de GitHub Pages
 - [x] Captura en vivo por Web Bluetooth (página `#/captura` del dashboard; guarda vía `POST /api/sesion`, convive con la carga de CSV raw)
 - [ ] Resolver el error 020 al primer A tras conectar (hoy: activar la sesión con B); requiere entender el consumo de RAM de la micro:bit con BLE UART
 - [x] Marcar como interrumpido el tiro en el que se cayó el BLE (se marca, no se excluye de las métricas)
-- [ ] Probar con la placa: caída a mitad de tiro, recuperar sesión tras recargar, `getDevices()` en Chrome/Bluefy y tiempo de guardado de una sesión larga (>15 min) en producción
-- [ ] `/api/upload` y `scripts/procesar_sesion.py` esperan el formato de log del firmware anterior (`tiro,x,y,z` con `E`/`B`; `parse_events` exige 4 campos); el firmware actual manda `x,y,z`, así que hoy los logs de nRF Connect no se procesan. Unificar o migrar el parser de logs crudos
-- [ ] `/api/upload` usa la fecha del servidor (UTC), igual desfase que ya se corrigió en `/api/sesion`
-- [ ] Rate limiting en el backend (opcional, no bloqueante para el MVP)
+- [ ] Probar con la placa: caída a mitad de tiro, recuperar sesión tras recargar, `getDevices()` en Chrome/Bluefy y tiempo de guardado de una sesión larga (>15 min) en producción- [ ] Rate limiting en el backend (opcional, no bloqueante para el MVP)
 - [x] Migrar la persistencia del backend de CSV+JSON a SQLite/Turso (ver sección Backend → Deploy)
 - [ ] Migrar `scripts/construir_bd_tiros.py` y el notebook de análisis a la misma base de datos (hoy siguen usando CSVs locales, fuera del alcance de la API desplegada)
 - [ ] Restringir CORS del backend al dominio de GitHub Pages antes de un uso real (hoy abierto con `allow_origins=["*"]`)
